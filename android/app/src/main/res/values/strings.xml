@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Doorbell Detector</string>
+    <string name="app_description">Reenvía notificaciones del timbre a tu propio servidor privado para que toda la familia reciba la alerta.</string>
+    <string name="privacy_title">Privacidad ante todo</string>
+    <string name="privacy_body">Doorbell Detector funciona 100% local:\n\n• Lee SOLO las notificaciones de la app que selecciones\n• Envía los datos ÚNICAMENTE al servidor que tú configures\n• No compartimos datos con terceros\n• No tenemos acceso a tu información\n• No hay rastreo ni analytics\n\nTú controlas completamente dónde va tu información.</string>
+    <string name="permission_title">Paso 1: Activar acceso a notificaciones</string>
+    <string name="permission_body">Doorbell Detector necesita permiso para leer notificaciones. Solo así puede capturar cuando alguien toque el timbre y reenviarlo a tu servidor.\n\nImportante: En algunos dispositivos (Xiaomi, Huawei, Oppo), deberás activar primero \"Permitir configuración restringida\" dentro de los ajustes de la app.</string>
+    <string name="permission_step1">1. Busca \"Doorbell Detector\" en la lista y activa el interruptor</string>
+    <string name="permission_step2">2. Si no aparece, toca el menú ⋮ y activa \"Mostrar sistema\" o \"Permitir configuración restringida\"</string>
+    <string name="permission_step3">3. Vuelve a la app cuando esté activado</string>
+    <string name="notification_permission_body">En Android 13+, también necesitas permitir que la app muestre notificaciones.</string>
+</resources>

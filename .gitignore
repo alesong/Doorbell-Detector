@@ -1,0 +1,13 @@
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/captures/
+.idea/
+*.iml
+*.keystore
+backend/node_modules/
+backend/data.db
+backend/data.db-shm
+backend/data.db-wal
+backend/.env

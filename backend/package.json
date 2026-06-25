@@ -1,0 +1,17 @@
+{
+  "name": "doorbell-detector-backend",
+  "version": "1.0.0",
+  "description": "Backend for Doorbell Detector - receives notifications and broadcasts via WebSocket",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.11.1",
+    "cors": "^2.8.5",
+    "express": "^4.21.0",
+    "uuid": "^10.0.0",
+    "ws": "^8.18.0"
+  }
+}

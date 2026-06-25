@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Doorbell Detector - Simulador</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0f172a; color: #e2e8f0; min-height: 100vh;
+    }
+    header {
+      background: #1e293b; padding: 1rem 2rem; border-bottom: 1px solid #334155;
+      display: flex; align-items: center; gap: 1.5rem;
+    }
+    header a {
+      color: #94a3b8; text-decoration: none; font-size: 0.875rem;
+    }
+    header a:hover { color: #60a5fa; }
+    h1 { font-size: 1.25rem; font-weight: 600; }
+    .layout {
+      display: grid; grid-template-columns: 400px 1fr; gap: 2rem;
+      max-width: 1200px; margin: 2rem auto; padding: 0 1rem;
+      align-items: start;
+    }
+    @media (max-width: 800px) {
+      .layout { grid-template-columns: 1fr; }
+    }
+
+    .card {
+      background: #1e293b; border: 1px solid #334155; border-radius: 10px;
+      padding: 1.5rem;
+    }
+    .card h2 { font-size: 1rem; margin-bottom: 1rem; color: #94a3b8; }
+
+    .field { margin-bottom: 1rem; }
+    .field label { display: block; font-size: 0.8rem; color: #94a3b8; margin-bottom: 0.3rem; }
+    .field input, .field textarea, .field select {
+      width: 100%; padding: 0.6rem; border-radius: 6px;
+      border: 1px solid #475569; background: #0f172a; color: #e2e8f0;
+      font-size: 0.9rem;
+    }
+    .field input:focus, .field textarea:focus {
+      outline: none; border-color: #3b82f6;
+    }
+    .field textarea { resize: vertical; min-height: 60px; }
+
+    .btn {
+      background: #3b82f6; color: #fff; border: none; padding: 0.7rem 1.5rem;
+      border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-weight: 500;
+      transition: background 0.2s; width: 100%;
+    }
+    .btn:hover { background: #2563eb; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn.green { background: #22c55e; }
+    .btn.green:hover { background: #16a34a; }
+    .btn.gray { background: #475569; }
+    .btn.gray:hover { background: #64748b; }
+
+    .inline-btns { display: flex; gap: 0.5rem; }
+    .inline-btns .btn { flex: 1; }
+
+    .response-box {
+      margin-top: 1rem; padding: 0.8rem; border-radius: 6px;
+      background: #0f172a; font-family: monospace; font-size: 0.8rem;
+      min-height: 50px; white-space: pre-wrap; word-break: break-all;
+    }
+    .response-box.success { border-left: 3px solid #22c55e; }
+    .response-box.error { border-left: 3px solid #ef4444; }
+
+    .log {
+      max-height: 500px; overflow-y: auto;
+    }
+    .log-entry {
+      padding: 0.6rem; border-bottom: 1px solid #1e293b;
+      font-size: 0.8rem; display: flex; gap: 0.5rem; align-items: flex-start;
+    }
+    .log-entry .time { color: #64748b; white-space: nowrap; min-width: 70px; }
+    .log-entry .badge {
+      padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.7rem;
+      font-weight: 600; white-space: nowrap;
+    }
+    .log-entry .badge.ok { background: #22c55e; color: #052e16; }
+    .log-entry .badge.fail { background: #ef4444; color: #450a0a; }
+    .log-entry .badge.sending { background: #f59e0b; color: #451a03; }
+    .log-entry .body { color: #94a3b8; flex: 1; }
+    .log-empty { text-align: center; color: #64748b; padding: 2rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Simulador de App</h1>
+    <a href="/" target="_blank">Ver notificaciones &rarr;</a>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:0.5rem">
+      <span style="font-size:0.8rem;color:#94a3b8" id="statusText">Inactivo</span>
+    </div>
+  </header>
+
+  <div class="layout">
+    <div>
+      <div class="card">
+        <h2>Enviar notificación</h2>
+        <form id="sendForm" onsubmit="sendNotification(event)">
+          <div class="field">
+            <label>App</label>
+            <select id="app_name">
+              <option value="Tuya Smart">Tuya Smart</option>
+              <option value="Smart Life">Smart Life</option>
+              <option value="Ring">Ring</option>
+              <option value="Google Home">Google Home</option>
+              <option value="Eufy Security">Eufy Security</option>
+              <option value="Timbre Inteligente">Timbre Inteligente</option>
+              <option value="__test_app__">__test_app__ (debug)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Package name</label>
+            <input id="package_name" value="com.tuya.smart" placeholder="com.example.app">
+          </div>
+          <div class="field">
+            <label>Título</label>
+            <input id="title" value="Alguien toca el timbre" placeholder="Título de la notificación">
+          </div>
+          <div class="field">
+            <label>Cuerpo</label>
+            <textarea id="body" placeholder="Contenido de la notificación">Persona detectada en la puerta principal</textarea>
+          </div>
+          <button type="submit" class="btn" id="sendBtn">Enviar notificación</button>
+        </form>
+        <div id="response" class="response-box">La respuesta aparecerá aquí...</div>
+      </div>
+
+      <div class="card" style="margin-top:1rem">
+        <h2>Auto-envío</h2>
+        <div class="inline-btns">
+          <button class="btn green" id="autoBtn" onclick="toggleAutoSend()">Iniciar auto-envío</button>
+          <button class="btn gray" onclick="sendTestBatch()">Enviar 5</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Registro de envíos</h2>
+      <div class="log" id="log">
+        <div class="log-empty">Usa el formulario para enviar notificaciones de prueba</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const logEl = document.getElementById('log');
+    const responseEl = document.getElementById('response');
+    const sendBtn = document.getElementById('sendBtn');
+    const autoBtn = document.getElementById('autoBtn');
+    const statusText = document.getElementById('statusText');
+    let autoInterval = null;
+    let autoCount = 0;
+
+    const titles = [
+      'Alguien toca el timbre',
+      'Movimiento detectado',
+      'Paquete entregado',
+      'Persona en la entrada',
+      'Alerta de seguridad',
+    ];
+    const bodies = [
+      'Persona detectada en la puerta principal',
+      'Se ha detectado movimiento en la entrada',
+      'Un paquete ha sido entregado en la puerta',
+      'Alguien está esperando en la entrada',
+      'Cámara detectó actividad en la entrada principal',
+    ];
+
+    async function sendNotification(event) {
+      if (event) event.preventDefault();
+      sendBtn.disabled = true;
+      sendBtn.textContent = 'Enviando...';
+
+      const payload = {
+        app_name: document.getElementById('app_name').value,
+        package_name: document.getElementById('package_name').value,
+        title: document.getElementById('title').value,
+        body: document.getElementById('body').value,
+      };
+
+      addLog('sending', payload.title || payload.body, 'Enviando...');
+
+      try {
+        const res = await fetch('/api/notifications', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (res.ok) {
+          responseEl.className = 'response-box success';
+          responseEl.textContent = JSON.stringify(data, null, 2);
+          addLog('ok', payload.title || payload.body, `HTTP ${res.status} — ${data.id.slice(0,8)}`);
+        } else {
+          responseEl.className = 'response-box error';
+          responseEl.textContent = JSON.stringify(data, null, 2);
+          addLog('fail', payload.title || payload.body, `HTTP ${res.status} — ${data.error || 'Error'}`);
+        }
+      } catch (err) {
+        responseEl.className = 'response-box error';
+        responseEl.textContent = `Error de conexión: ${err.message}`;
+        addLog('fail', payload.title || payload.body, `Error: ${err.message}`);
+      } finally {
+        sendBtn.disabled = false;
+        sendBtn.textContent = 'Enviar notificación';
+      }
+    }
+
+    function addLog(status, label, detail) {
+      const empty = logEl.querySelector('.log-empty');
+      if (empty) empty.remove();
+
+      const entry = document.createElement('div');
+      entry.className = 'log-entry';
+      const now = new Date();
+      const time = now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const badgeText = status === 'ok' ? 'OK' : status === 'fail' ? 'FAIL' : '...';
+      entry.innerHTML = `
+        <span class="time">${time}</span>
+        <span class="badge ${status}">${badgeText}</span>
+        <span class="body">${escapeHtml(label)}</span>
+        <span style="color:#64748b;font-size:0.75rem">${escapeHtml(detail)}</span>
+      `;
+      logEl.insertBefore(entry, logEl.firstChild);
+
+      if (logEl.children.length > 200) {
+        logEl.lastChild.remove();
+      }
+    }
+
+    function toggleAutoSend() {
+      if (autoInterval) {
+        clearInterval(autoInterval);
+        autoInterval = null;
+        autoBtn.textContent = 'Iniciar auto-envío';
+        autoBtn.className = 'btn green';
+        statusText.textContent = 'Inactivo';
+        return;
+      }
+
+      autoCount = 0;
+      autoBtn.textContent = 'Detener auto-envío';
+      autoBtn.className = 'btn';
+      statusText.textContent = 'Auto-enviando...';
+
+      sendRandom();
+      autoInterval = setInterval(sendRandom, 3000);
+    }
+
+    function sendRandom() {
+      const idx = Math.floor(Math.random() * titles.length);
+      document.getElementById('app_name').value = document.getElementById('app_name').options[Math.floor(Math.random() * 6)].value;
+      document.getElementById('package_name').value = 'com.' + document.getElementById('app_name').value.toLowerCase().replace(/\s+/g, '');
+      document.getElementById('title').value = titles[idx];
+      document.getElementById('body').value = bodies[idx];
+      sendNotification(null);
+      autoCount++;
+    }
+
+    function sendTestBatch() {
+      for (let i = 0; i < 5; i++) {
+        setTimeout(() => {
+          const idx = Math.floor(Math.random() * titles.length);
+          document.getElementById('app_name').value = document.getElementById('app_name').options[Math.floor(Math.random() * 6)].value;
+          document.getElementById('package_name').value = 'com.' + document.getElementById('app_name').value.toLowerCase().replace(/\s+/g, '');
+          document.getElementById('title').value = titles[idx];
+          document.getElementById('body').value = bodies[idx];
+          sendNotification(null);
+        }, i * 500);
+      }
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+  </script>
+</body>
+</html>
