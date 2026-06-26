@@ -73,6 +73,7 @@ import com.doorbell.detector.data.ApiClient
 import com.doorbell.detector.data.PreferencesManager
 import com.doorbell.detector.model.AppInfo
 import com.doorbell.detector.service.NotificationEntry
+import com.doorbell.detector.service.TraceEntry
 import com.doorbell.detector.service.NotificationListener
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -934,6 +935,7 @@ private fun MainContent(
                     Button(
                         onClick = {
                             isStartingService = true
+                            NotificationListener.setTargets(selectedPackages, selectedAppNames, apiUrl)
                             val intent = Intent(context, NotificationListener::class.java).apply {
                                 putExtra("start_from_ui", true)
                                 putExtra("force_rebind", true)
@@ -1221,6 +1223,81 @@ private fun MainContent(
                                     text = entry.error,
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.error,
+                                    maxLines = 3
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Trace log card
+            Card(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Trazabilidad",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        TextButton(onClick = { NotificationListener.clearTrace() }) {
+                            Text("Limpiar")
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        val connected = NotificationListener.isConnected
+                        Text(
+                            text = if (connected) "Listener: ACTIVO" else "Listener: DESCONECTADO",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Bold,
+                            color = if (connected) MaterialTheme.colorScheme.primary
+                                   else MaterialTheme.colorScheme.error
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    val traces by NotificationListener.traceFlow.collectAsState()
+                    if (traces.isEmpty()) {
+                        Text(
+                            text = "Sin eventos aún. Inicia el servicio de escucha.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        LazyColumn(modifier = Modifier.height(250.dp)) {
+                            items(traces.take(50)) { trace ->
+                                HorizontalDivider(modifier = Modifier.padding(vertical = 1.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = trace.timestamp,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.width(80.dp)
+                                    )
+                                    Text(
+                                        text = trace.event,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.width(80.dp)
+                                    )
+                                }
+                                Text(
+                                    text = trace.detail,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 3
                                 )
                             }

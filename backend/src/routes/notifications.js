@@ -5,11 +5,23 @@ const { broadcastNotification } = require('../websocket');
 
 const router = Router();
 
+const serverLog = [];
+const MAX_LOG = 200;
+
+function addLog(event, detail) {
+  const entry = { ts: new Date().toISOString(), event, detail };
+  serverLog.unshift(entry);
+  if (serverLog.length > MAX_LOG) serverLog.length = MAX_LOG;
+  console.log(`[${entry.ts}] ${event}: ${detail}`);
+}
+
 router.post('/', async (req, res) => {
   try {
     const { app_name, package_name, title, body } = req.body;
+    const startMs = Date.now();
 
     if (!title && !body) {
+      addLog('POST', 'Rejected: title and body empty');
       return res.status(400).json({ error: 'title or body is required' });
     }
 
@@ -22,8 +34,16 @@ router.post('/', async (req, res) => {
       received_at: new Date().toISOString(),
     };
 
+    addLog('POST', `Received from=${app_name} pkg=${package_name} id=${notification.id} title="${title}"`);
+
     const stored = insertNotification(notification);
+    addLog('DB', `Stored id=${notification.id}`);
+
     broadcastNotification(stored);
+    addLog('WS', `Broadcast id=${notification.id}`);
+
+    const duration = Date.now() - startMs;
+    addLog('POST', `Complete id=${notification.id} ${duration}ms`);
 
     res.status(201).json(stored);
   } catch (err) {
@@ -44,9 +64,14 @@ router.get('/', async (req, res) => {
   }
 });
 
+router.get('/log', (req, res) => {
+  res.json(serverLog);
+});
+
 router.delete('/', async (req, res) => {
   try {
     deleteAllNotifications();
+    addLog('DELETE', 'All notifications deleted');
     res.json({ message: 'All notifications deleted' });
   } catch (err) {
     console.error('Error deleting notifications:', err);
@@ -62,10 +87,12 @@ router.get('/stream', (req, res) => {
     'X-Accel-Buffering': 'no',
   });
 
+  addLog('SSE', 'Client connected');
   res.write('data: {"type":"connected"}\n\n');
 
   const onNotification = (notification) => {
-    res.write(`data: ${JSON.stringify({ type: 'notification', notification })}\n\n`);
+    const msg = `data: ${JSON.stringify({ type: 'notification', notification })}\n\n`;
+    res.write(msg);
   };
 
   notificationEvents.on('notification', onNotification);
@@ -75,6 +102,7 @@ router.get('/stream', (req, res) => {
   }, 30000);
 
   req.on('close', () => {
+    addLog('SSE', 'Client disconnected');
     notificationEvents.off('notification', onNotification);
     clearInterval(heartbeat);
   });

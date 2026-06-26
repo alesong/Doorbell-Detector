@@ -1,6 +1,7 @@
-android/.gradle/
-android/build/
-android/app/build/
+*/.gradle/
+*/build/
+*/app/build/
+*/local.properties
 android/local.properties
 android/captures/
 .idea/

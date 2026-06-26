@@ -35,6 +35,12 @@ data class NotificationEntry(
     val error: String? = null
 )
 
+data class TraceEntry(
+    val timestamp: String,
+    val event: String,
+    val detail: String
+)
+
 class NotificationListener : NotificationListenerService() {
 
     companion object {
@@ -42,6 +48,7 @@ class NotificationListener : NotificationListenerService() {
         private const val FOREGROUND_NOTIFICATION_ID = 1
         private const val MAX_ENTRIES = 20
         private const val HEARTBEAT_INTERVAL_MS = 30_000L
+        private const val POLL_INTERVAL_MS = 3_000L
 
         @Volatile
         var isConnected: Boolean = false
@@ -58,17 +65,32 @@ class NotificationListener : NotificationListenerService() {
         private val _notificationsFlow = MutableStateFlow<List<NotificationEntry>>(emptyList())
         val notificationsFlow: StateFlow<List<NotificationEntry>> = _notificationsFlow
 
-        private val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+        private val _traceFlow = MutableStateFlow<List<TraceEntry>>(emptyList())
+        val traceFlow: StateFlow<List<TraceEntry>> = _traceFlow
+
+        private val timeFormat = SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault())
+
+        private val seenNotifKeys = mutableSetOf<String>()
 
         fun setTargets(packages: Set<String>, names: Map<String, String>, serverUrl: String) {
             targetPackages = packages
             targetAppNames = names
             targetServer = serverUrl
             Log.d(TAG, "setTargets: pkgs=$packages server=$serverUrl")
+            addTrace("CONFIG", "targets=$packages server=$serverUrl")
         }
 
         fun clearNotifications() {
             _notificationsFlow.value = emptyList()
+        }
+
+        private fun addTrace(event: String, detail: String) {
+            val ts = timeFormat.format(Date())
+            _traceFlow.value = listOf(TraceEntry(ts, event, detail)) + _traceFlow.value.take(99)
+        }
+
+        fun clearTrace() {
+            _traceFlow.value = emptyList()
         }
     }
 
@@ -76,46 +98,79 @@ class NotificationListener : NotificationListenerService() {
     private val apiClient = ApiClient()
 
     private val mainHandler = Handler(Looper.getMainLooper())
+
     private val heartbeatRunnable = object : Runnable {
         override fun run() {
             if (!isConnected) {
                 Log.w(TAG, "Heartbeat: listener desconectado, solicitando rebind")
+                addTrace("HEARTBEAT", "listener desconectado → requestRebind()")
                 try {
                     requestRebind(ComponentName(this@NotificationListener, NotificationListener::class.java))
                 } catch (e: Exception) {
                     Log.e(TAG, "requestRebind failed", e)
+                    addTrace("HEARTBEAT", "requestRebind falló: ${e.message}")
                 }
             }
             mainHandler.postDelayed(this, HEARTBEAT_INTERVAL_MS)
         }
     }
 
+    private val pollRunnable = object : Runnable {
+        override fun run() {
+            try {
+                val active = getActiveNotifications()
+                addTrace("POLL", "getActiveNotifications() → ${active.size} activas")
+                for (sbn in active) {
+                    val key = "${sbn.packageName}:${sbn.id}:${sbn.postTime}"
+                    if (key !in seenNotifKeys) {
+                        seenNotifKeys.add(key)
+                        addTrace("POLL", "NUEVA ${sbn.packageName} id=${sbn.id} title=${sbn.notification.extras?.getString(Notification.EXTRA_TITLE)}")
+                        processNotificationEntry(sbn)
+                    }
+                }
+                if (seenNotifKeys.size > 500) {
+                    val iter = seenNotifKeys.iterator()
+                    repeat(250) { if (iter.hasNext()) { iter.next(); iter.remove() } }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "poll exception", e)
+                addTrace("POLL", "Error: ${e.message}")
+            }
+            mainHandler.postDelayed(this, POLL_INTERVAL_MS)
+        }
+    }
+
     override fun onCreate() {
         super.onCreate()
         Log.d(TAG, "onCreate")
-        startForegroundSafe()
+        addTrace("LIFECYCLE", "onCreate")
+        val intent = Intent(this, NotificationListener::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent)
+        } else {
+            startService(intent)
+        }
         loadFromDataStore()
         observePreferences()
-        mainHandler.postDelayed(heartbeatRunnable, HEARTBEAT_INTERVAL_MS)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d(TAG, "onStartCommand flags=$flags startId=$startId")
         startForegroundSafe()
-        if (intent?.getBooleanExtra("force_rebind", false) == true) {
-            Log.d(TAG, "force_rebind requested")
-            try {
-                requestRebind(ComponentName(this, NotificationListener::class.java))
-            } catch (e: Exception) {
-                Log.e(TAG, "requestRebind failed", e)
-            }
+        addTrace("LIFECYCLE", "onStartCommand startId=$startId")
+        try {
+            requestRebind(ComponentName(this, NotificationListener::class.java))
+            addTrace("LIFECYCLE", "requestRebind() en onStartCommand")
+        } catch (e: Exception) {
+            Log.e(TAG, "requestRebind failed", e)
+            addTrace("LIFECYCLE", "requestRebind falló: ${e.message}")
         }
         return START_STICKY
     }
 
     override fun onBind(intent: Intent?): android.os.IBinder? {
         Log.d(TAG, "onBind")
-        startForegroundSafe()
+        addTrace("LIFECYCLE", "onBind")
         return super.onBind(intent)
     }
 
@@ -124,13 +179,18 @@ class NotificationListener : NotificationListenerService() {
         isConnected = true
         startForegroundSafe()
         loadFromDataStore()
+        addTrace("LIFECYCLE", "onListenerConnected — LISTENER ACTIVO")
+        mainHandler.post(pollRunnable)
+        mainHandler.postDelayed(heartbeatRunnable, HEARTBEAT_INTERVAL_MS)
     }
 
     override fun onListenerDisconnected() {
         Log.d(TAG, "onListenerDisconnected")
         isConnected = false
+        addTrace("LIFECYCLE", "onListenerDisconnected — listener perdido")
         try {
             requestRebind(ComponentName(this, NotificationListener::class.java))
+            addTrace("LIFECYCLE", "requestRebind() en onListenerDisconnected")
         } catch (e: Exception) {
             Log.e(TAG, "requestRebind failed", e)
         }
@@ -141,9 +201,20 @@ class NotificationListener : NotificationListenerService() {
         Log.d(TAG, "onDestroy")
         isConnected = false
         mainHandler.removeCallbacks(heartbeatRunnable)
+        mainHandler.removeCallbacks(pollRunnable)
+        addTrace("LIFECYCLE", "onDestroy")
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
+        addTrace("EVENT", "onNotificationPosted ${sbn.packageName} id=${sbn.id}")
+        processNotificationEntry(sbn)
+    }
+
+    override fun onNotificationRemoved(sbn: StatusBarNotification) {
+        addTrace("EVENT", "onNotificationRemoved ${sbn.packageName} id=${sbn.id}")
+    }
+
+    private fun processNotificationEntry(sbn: StatusBarNotification) {
         val packageName = sbn.packageName
         val extras = sbn.notification.extras
         val title = extras?.getString(Notification.EXTRA_TITLE) ?: ""
@@ -165,15 +236,19 @@ class NotificationListener : NotificationListenerService() {
 
         if (targetPackages.isEmpty() || packageName !in targetPackages) {
             Log.d(TAG, "filtered out: pkg=$packageName targets=$targetPackages")
+            addTrace("FILTER", "BLOQUEADO pkg=$packageName (targets=$targetPackages)")
             return
         }
         if (targetServer.isBlank()) {
-            Log.d(TAG, "filtered out: no server configured")
+            addTrace("FILTER", "BLOQUEADO — servidor no configurado")
             return
         }
         if (title.isBlank() && text.isBlank()) return
 
+        addTrace("HTTP", "POST ${packageName} title='$title' INICIO")
+
         scope.launch {
+            val startMs = System.currentTimeMillis()
             try {
                 val result = apiClient.sendNotification(
                     baseUrl = targetServer,
@@ -182,6 +257,7 @@ class NotificationListener : NotificationListenerService() {
                     title = title,
                     body = text
                 )
+                val duration = System.currentTimeMillis() - startMs
                 val ok = result.isSuccess
                 val current = _notificationsFlow.value.toMutableList()
                 val idx = current.indexOfFirst { it === entry }
@@ -192,9 +268,12 @@ class NotificationListener : NotificationListenerService() {
                     )
                     _notificationsFlow.value = current
                 }
-                Log.d(TAG, "sendNotification: ${if (ok) "OK" else result.exceptionOrNull()?.message}")
+                addTrace("HTTP", "POST ${if (ok) "OK" else "FAIL"} ${duration}ms${if (!ok) " ${result.exceptionOrNull()?.message}" else ""}")
+                Log.d(TAG, "sendNotification: ${if (ok) "OK" else result.exceptionOrNull()?.message} (${duration}ms)")
             } catch (e: Exception) {
+                val duration = System.currentTimeMillis() - startMs
                 Log.e(TAG, "sendNotification exception", e)
+                addTrace("HTTP", "POST EXCEPTION ${duration}ms: ${e.message}")
                 val current = _notificationsFlow.value.toMutableList()
                 val idx = current.indexOfFirst { it === entry }
                 if (idx >= 0) {
@@ -204,8 +283,6 @@ class NotificationListener : NotificationListenerService() {
             }
         }
     }
-
-    override fun onNotificationRemoved(sbn: StatusBarNotification) {}
 
     private fun startForegroundSafe() {
         try {
@@ -247,12 +324,14 @@ class NotificationListener : NotificationListenerService() {
                 val pm = PreferencesManager(this@NotificationListener)
                 if (targetPackages.isEmpty()) {
                     targetPackages = pm.selectedPackages.first()
+                    addTrace("CONFIG", "loaded selectedPackages=$targetPackages")
                 }
                 if (targetAppNames.isEmpty()) {
                     targetAppNames = pm.selectedAppNames.first()
                 }
                 if (targetServer.isBlank()) {
                     targetServer = pm.apiUrl.first()
+                    addTrace("CONFIG", "loaded targetServer=$targetServer")
                 }
                 Log.d(TAG, "loadFromDataStore: pkgs=$targetPackages server=$targetServer")
             } catch (e: Exception) {
@@ -268,6 +347,7 @@ class NotificationListener : NotificationListenerService() {
                 pm.selectedPackages.collect { value ->
                     targetPackages = value
                     startForegroundSafe()
+                    addTrace("CONFIG", "selectedPackages changed: $value")
                     Log.d(TAG, "selectedPackages changed: $value")
                 }
             } catch (e: Exception) {
@@ -290,6 +370,7 @@ class NotificationListener : NotificationListenerService() {
                 val pm = PreferencesManager(this@NotificationListener)
                 pm.apiUrl.collect { value ->
                     targetServer = value
+                    addTrace("CONFIG", "targetServer changed: $value")
                     Log.d(TAG, "apiUrl changed: $value")
                 }
             } catch (e: Exception) {
