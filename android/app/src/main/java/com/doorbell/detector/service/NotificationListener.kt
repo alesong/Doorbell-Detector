@@ -3,8 +3,11 @@ package com.doorbell.detector.service
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.content.ComponentName
 import android.content.Intent
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
@@ -38,6 +41,7 @@ class NotificationListener : NotificationListenerService() {
         private const val TAG = "NotificationListener"
         private const val FOREGROUND_NOTIFICATION_ID = 1
         private const val MAX_ENTRIES = 20
+        private const val HEARTBEAT_INTERVAL_MS = 30_000L
 
         @Volatile
         var isConnected: Boolean = false
@@ -71,17 +75,41 @@ class NotificationListener : NotificationListenerService() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val apiClient = ApiClient()
 
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val heartbeatRunnable = object : Runnable {
+        override fun run() {
+            if (!isConnected) {
+                Log.w(TAG, "Heartbeat: listener desconectado, solicitando rebind")
+                try {
+                    requestRebind(ComponentName(this@NotificationListener, NotificationListener::class.java))
+                } catch (e: Exception) {
+                    Log.e(TAG, "requestRebind failed", e)
+                }
+            }
+            mainHandler.postDelayed(this, HEARTBEAT_INTERVAL_MS)
+        }
+    }
+
     override fun onCreate() {
         super.onCreate()
         Log.d(TAG, "onCreate")
         startForegroundSafe()
         loadFromDataStore()
         observePreferences()
+        mainHandler.postDelayed(heartbeatRunnable, HEARTBEAT_INTERVAL_MS)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d(TAG, "onStartCommand flags=$flags startId=$startId")
         startForegroundSafe()
+        if (intent?.getBooleanExtra("force_rebind", false) == true) {
+            Log.d(TAG, "force_rebind requested")
+            try {
+                requestRebind(ComponentName(this, NotificationListener::class.java))
+            } catch (e: Exception) {
+                Log.e(TAG, "requestRebind failed", e)
+            }
+        }
         return START_STICKY
     }
 
@@ -101,12 +129,18 @@ class NotificationListener : NotificationListenerService() {
     override fun onListenerDisconnected() {
         Log.d(TAG, "onListenerDisconnected")
         isConnected = false
+        try {
+            requestRebind(ComponentName(this, NotificationListener::class.java))
+        } catch (e: Exception) {
+            Log.e(TAG, "requestRebind failed", e)
+        }
     }
 
     override fun onDestroy() {
         super.onDestroy()
         Log.d(TAG, "onDestroy")
         isConnected = false
+        mainHandler.removeCallbacks(heartbeatRunnable)
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
@@ -185,6 +219,7 @@ class NotificationListener : NotificationListenerService() {
                 manager.createNotificationChannel(channel)
             }
 
+            val connStatus = if (isConnected) "conectado" else "desconectado"
             val label = if (targetPackages.isNotEmpty()) {
                 targetPackages.size.toString() + " app(s): " + targetPackages.take(3).joinToString(", ") {
                     targetAppNames[it] ?: it
@@ -193,7 +228,7 @@ class NotificationListener : NotificationListenerService() {
                 "ninguna app"
             }
             val notification = NotificationCompat.Builder(this, DoorbellDetectorApp.FOREGROUND_CHANNEL_ID)
-                .setContentTitle("Doorbell Detector")
+                .setContentTitle("Doorbell Detector ($connStatus)")
                 .setContentText("Escuchando notificaciones de $label")
                 .setSmallIcon(android.R.drawable.ic_dialog_info)
                 .setOngoing(true)

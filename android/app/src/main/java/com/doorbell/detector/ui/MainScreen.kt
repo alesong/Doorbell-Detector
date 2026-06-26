@@ -936,6 +936,7 @@ private fun MainContent(
                             isStartingService = true
                             val intent = Intent(context, NotificationListener::class.java).apply {
                                 putExtra("start_from_ui", true)
+                                putExtra("force_rebind", true)
                             }
                             try {
                                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
