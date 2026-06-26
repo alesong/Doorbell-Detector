@@ -28,7 +28,8 @@ data class NotificationEntry(
     val title: String,
     val text: String,
     val timestamp: String,
-    val sent: Boolean = false
+    val sent: Boolean = false,
+    val error: String? = null
 )
 
 class NotificationListener : NotificationListenerService() {
@@ -128,28 +129,45 @@ class NotificationListener : NotificationListenerService() {
 
         Log.d(TAG, "onNotificationPosted pkg=$packageName targets=$targetPackages title='$title'")
 
-        if (targetPackages.isNotEmpty() && packageName !in targetPackages) return
-        if (targetServer.isBlank()) return
+        if (targetPackages.isEmpty() || packageName !in targetPackages) {
+            Log.d(TAG, "filtered out: pkg=$packageName targets=$targetPackages")
+            return
+        }
+        if (targetServer.isBlank()) {
+            Log.d(TAG, "filtered out: no server configured")
+            return
+        }
         if (title.isBlank() && text.isBlank()) return
 
         scope.launch {
-            val result = apiClient.sendNotification(
-                baseUrl = targetServer,
-                appName = targetAppNames[packageName] ?: packageName,
-                packageName = packageName,
-                title = title,
-                body = text
-            )
-            val ok = result.isSuccess
-            if (ok) {
+            try {
+                val result = apiClient.sendNotification(
+                    baseUrl = targetServer,
+                    appName = targetAppNames[packageName] ?: packageName,
+                    packageName = packageName,
+                    title = title,
+                    body = text
+                )
+                val ok = result.isSuccess
                 val current = _notificationsFlow.value.toMutableList()
                 val idx = current.indexOfFirst { it === entry }
                 if (idx >= 0) {
-                    current[idx] = entry.copy(sent = true)
+                    current[idx] = entry.copy(
+                        sent = ok,
+                        error = if (ok) null else result.exceptionOrNull()?.message
+                    )
+                    _notificationsFlow.value = current
+                }
+                Log.d(TAG, "sendNotification: ${if (ok) "OK" else result.exceptionOrNull()?.message}")
+            } catch (e: Exception) {
+                Log.e(TAG, "sendNotification exception", e)
+                val current = _notificationsFlow.value.toMutableList()
+                val idx = current.indexOfFirst { it === entry }
+                if (idx >= 0) {
+                    current[idx] = entry.copy(error = e.message)
                     _notificationsFlow.value = current
                 }
             }
-            Log.d(TAG, "sendNotification: ${if (ok) "OK" else result.exceptionOrNull()?.message}")
         }
     }
 

@@ -1181,10 +1181,18 @@ private fun MainContent(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 Text(
-                                    text = if (entry.sent) "Enviado" else "Pendiente",
+                                    text = when {
+                                        entry.error != null -> "Error"
+                                        entry.sent -> "Enviado"
+                                        !matched -> "Filtrada"
+                                        else -> "Pendiente"
+                                    },
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = if (entry.sent) MaterialTheme.colorScheme.primary
-                                           else MaterialTheme.colorScheme.error
+                                    color = when {
+                                        entry.error != null -> MaterialTheme.colorScheme.error
+                                        entry.sent -> MaterialTheme.colorScheme.primary
+                                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                    }
                                 )
                             }
                             Text(
@@ -1205,6 +1213,14 @@ private fun MainContent(
                                     },
                                     style = MaterialTheme.typography.bodySmall,
                                     maxLines = 2
+                                )
+                            }
+                            if (entry.error != null) {
+                                Text(
+                                    text = entry.error,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                    maxLines = 3
                                 )
                             }
                         }
