@@ -1,14 +1,24 @@
-*/.gradle/
-*/build/
-*/app/build/
-*/local.properties
-android/local.properties
-android/captures/
-.idea/
+# Android
+.gradle/
+build/
+app/build/
+local.properties
+captures/
 *.iml
 *.keystore
+
+# Backend
 backend/node_modules/
 backend/data.db
 backend/data.db-shm
 backend/data.db-wal
 backend/.env
+
+# IDE
+.idea/
+
+# OpenCode AI config
+.opencode/
+
+# Generated APK
+*.apk

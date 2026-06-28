@@ -397,7 +397,7 @@ private fun MainContent(
     var isLoadingApps by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
     var showManualEntry by remember { mutableStateOf(false) }
-    var manualPackageName by remember { mutableStateOf("") }
+    var manualPackageName by remember { mutableStateOf("com.notifsender") }
     var connectionStatus by remember { mutableStateOf<String?>(null) }
     var isTesting by remember { mutableStateOf(false) }
     var apiUrlInput by remember(apiUrl) { mutableStateOf(apiUrl) }
@@ -940,15 +940,8 @@ private fun MainContent(
                                 putExtra("start_from_ui", true)
                                 putExtra("force_rebind", true)
                             }
-                            try {
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                    context.startForegroundService(intent)
-                                } else {
-                                    context.startService(intent)
-                                }
-                            } catch (e: Exception) {
-                                android.util.Log.e("MainScreen", "startService failed", e)
-                            }
+                            // Let the system handle the service via rebind request if needed.
+                            try { android.service.notification.NotificationListenerService.requestRebind(android.content.ComponentName(context, NotificationListener::class.java)) } catch (e: Exception) {}
                             scope.launch {
                                 kotlinx.coroutines.delay(2000)
                                 isStartingService = false
@@ -987,6 +980,40 @@ private fun MainContent(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "Google Play Protect:",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Si el listener sigue DESCONECTADO, Play Protect podría estar bloqueando la app incluso después de instalada. Ve a Ajustes → Google → Seguridad → Google Play Protect y desactiva \"Analizar apps con Play Protect\" temporalmente, o ve a Ajustes → Apps → Doorbell Detector y revisa si hay restricciones de Play Protect.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedButton(
+                        onClick = {
+                            try {
+                                val intent = Intent(Intent.ACTION_VIEW).apply {
+                                    data = android.net.Uri.parse("https://play.google.com/store/account/playprotect")
+                                }
+                                context.startActivity(intent)
+                            } catch (e: Exception) {
+                                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                    data = android.net.Uri.fromParts("package", context.packageName, null)
+                                }
+                                context.startActivity(intent)
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Abrir configuración de Play Protect")
+                    }
                 }
             }
 
@@ -1264,6 +1291,16 @@ private fun MainContent(
                         )
                     }
 
+                    if (!NotificationListener.isConnected) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Si el listener no se conecta: 1) Desactiva Play Protect en Ajustes → Google → Seguridad  2) Revisa acceso a notificaciones en Ajustes → Apps → Acceso especial  3) Deshabilita optimización de batería",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            maxLines = 4
+                        )
+                    }
+
                     Spacer(modifier = Modifier.height(8.dp))
 
                     val traces by NotificationListener.traceFlow.collectAsState()
@@ -1343,20 +1380,7 @@ private fun Context.loadInstalledApps(): List<AppInfo> {
         .filter { info ->
             val isSystem = (info.flags and ApplicationInfo.FLAG_SYSTEM) != 0
             if (isSystem) return@filter false
-
-            val installer = try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                    val sourceInfo: InstallSourceInfo = pm.getInstallSourceInfo(info.packageName)
-                    sourceInfo.installingPackageName
-                } else {
-                    @Suppress("DEPRECATION")
-                    pm.getInstallerPackageName(info.packageName)
-                }
-            } catch (e: Exception) {
-                null
-            }
-
-            installer == "com.android.vending"
+            true
         }
         .map { info ->
             val appName = pm.getApplicationLabel(info).toString()

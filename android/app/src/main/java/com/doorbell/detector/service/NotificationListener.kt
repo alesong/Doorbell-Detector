@@ -70,7 +70,7 @@ class NotificationListener : NotificationListenerService() {
 
         private val timeFormat = SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault())
 
-        private val seenNotifKeys = mutableSetOf<String>()
+
 
         fun setTargets(packages: Set<String>, names: Map<String, String>, serverUrl: String) {
             targetPackages = packages
@@ -97,75 +97,15 @@ class NotificationListener : NotificationListenerService() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val apiClient = ApiClient()
 
-    private val mainHandler = Handler(Looper.getMainLooper())
 
-    private val heartbeatRunnable = object : Runnable {
-        override fun run() {
-            if (!isConnected) {
-                Log.w(TAG, "Heartbeat: listener desconectado, solicitando rebind")
-                addTrace("HEARTBEAT", "listener desconectado → requestRebind()")
-                try {
-                    requestRebind(ComponentName(this@NotificationListener, NotificationListener::class.java))
-                } catch (e: Exception) {
-                    Log.e(TAG, "requestRebind failed", e)
-                    addTrace("HEARTBEAT", "requestRebind falló: ${e.message}")
-                }
-            }
-            mainHandler.postDelayed(this, HEARTBEAT_INTERVAL_MS)
-        }
-    }
-
-    private val pollRunnable = object : Runnable {
-        override fun run() {
-            try {
-                val active = getActiveNotifications()
-                addTrace("POLL", "getActiveNotifications() → ${active.size} activas")
-                for (sbn in active) {
-                    val key = "${sbn.packageName}:${sbn.id}:${sbn.postTime}"
-                    if (key !in seenNotifKeys) {
-                        seenNotifKeys.add(key)
-                        addTrace("POLL", "NUEVA ${sbn.packageName} id=${sbn.id} title=${sbn.notification.extras?.getString(Notification.EXTRA_TITLE)}")
-                        processNotificationEntry(sbn)
-                    }
-                }
-                if (seenNotifKeys.size > 500) {
-                    val iter = seenNotifKeys.iterator()
-                    repeat(250) { if (iter.hasNext()) { iter.next(); iter.remove() } }
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "poll exception", e)
-                addTrace("POLL", "Error: ${e.message}")
-            }
-            mainHandler.postDelayed(this, POLL_INTERVAL_MS)
-        }
-    }
 
     override fun onCreate() {
         super.onCreate()
         Log.d(TAG, "onCreate")
         addTrace("LIFECYCLE", "onCreate")
-        val intent = Intent(this, NotificationListener::class.java)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(intent)
-        } else {
-            startService(intent)
-        }
+
         loadFromDataStore()
         observePreferences()
-    }
-
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Log.d(TAG, "onStartCommand flags=$flags startId=$startId")
-        startForegroundSafe()
-        addTrace("LIFECYCLE", "onStartCommand startId=$startId")
-        try {
-            requestRebind(ComponentName(this, NotificationListener::class.java))
-            addTrace("LIFECYCLE", "requestRebind() en onStartCommand")
-        } catch (e: Exception) {
-            Log.e(TAG, "requestRebind failed", e)
-            addTrace("LIFECYCLE", "requestRebind falló: ${e.message}")
-        }
-        return START_STICKY
     }
 
     override fun onBind(intent: Intent?): android.os.IBinder? {
@@ -177,11 +117,11 @@ class NotificationListener : NotificationListenerService() {
     override fun onListenerConnected() {
         Log.d(TAG, "onListenerConnected")
         isConnected = true
-        startForegroundSafe()
+
         loadFromDataStore()
         addTrace("LIFECYCLE", "onListenerConnected — LISTENER ACTIVO")
-        mainHandler.post(pollRunnable)
-        mainHandler.postDelayed(heartbeatRunnable, HEARTBEAT_INTERVAL_MS)
+
+
     }
 
     override fun onListenerDisconnected() {
@@ -200,8 +140,8 @@ class NotificationListener : NotificationListenerService() {
         super.onDestroy()
         Log.d(TAG, "onDestroy")
         isConnected = false
-        mainHandler.removeCallbacks(heartbeatRunnable)
-        mainHandler.removeCallbacks(pollRunnable)
+
+
         addTrace("LIFECYCLE", "onDestroy")
     }
 
@@ -284,40 +224,6 @@ class NotificationListener : NotificationListenerService() {
         }
     }
 
-    private fun startForegroundSafe() {
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                val channel = NotificationChannel(
-                    DoorbellDetectorApp.FOREGROUND_CHANNEL_ID,
-                    "Doorbell Detector",
-                    NotificationManager.IMPORTANCE_LOW
-                )
-                val manager = getSystemService(NotificationManager::class.java)
-                manager.createNotificationChannel(channel)
-            }
-
-            val connStatus = if (isConnected) "conectado" else "desconectado"
-            val label = if (targetPackages.isNotEmpty()) {
-                targetPackages.size.toString() + " app(s): " + targetPackages.take(3).joinToString(", ") {
-                    targetAppNames[it] ?: it
-                } + if (targetPackages.size > 3) "..." else ""
-            } else {
-                "ninguna app"
-            }
-            val notification = NotificationCompat.Builder(this, DoorbellDetectorApp.FOREGROUND_CHANNEL_ID)
-                .setContentTitle("Doorbell Detector ($connStatus)")
-                .setContentText("Escuchando notificaciones de $label")
-                .setSmallIcon(android.R.drawable.ic_dialog_info)
-                .setOngoing(true)
-                .build()
-
-            startForeground(FOREGROUND_NOTIFICATION_ID, notification)
-            Log.d(TAG, "startForeground OK")
-        } catch (e: Exception) {
-            Log.e(TAG, "startForeground failed: ${e.message}")
-        }
-    }
-
     private fun loadFromDataStore() {
         scope.launch {
             try {
@@ -346,7 +252,7 @@ class NotificationListener : NotificationListenerService() {
                 val pm = PreferencesManager(this@NotificationListener)
                 pm.selectedPackages.collect { value ->
                     targetPackages = value
-                    startForegroundSafe()
+            
                     addTrace("CONFIG", "selectedPackages changed: $value")
                     Log.d(TAG, "selectedPackages changed: $value")
                 }
