@@ -3,160 +3,345 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Doorbell Detector - Notificaciones</title>
+  <title>Doorbell Detector</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       background: #0f172a; color: #e2e8f0; min-height: 100vh;
+      display: flex;
+    }
+
+    /* ---- Sidebar ---- */
+    .sidebar {
+      width: 300px; min-width: 300px;
+      background: #1e293b; border-right: 1px solid #334155;
+      height: 100vh; overflow-y: auto;
+      display: flex; flex-direction: column;
+    }
+    .sidebar-header {
+      padding: 1rem 1.25rem;
+      border-bottom: 1px solid #334155;
+    }
+    .sidebar-header h1 { font-size: 1.1rem; font-weight: 600; }
+    .sidebar-header .sub { font-size: 0.75rem; color: #64748b; margin-top: 0.2rem; }
+    .sidebar-section { padding: 0.75rem 1.25rem; border-bottom: 1px solid #1e293b; }
+    .sidebar-section h2 {
+      font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em;
+      color: #64748b; margin-bottom: 0.5rem;
+    }
+    .route-item {
+      display: flex; align-items: center; gap: 0.5rem;
+      padding: 0.4rem 0; font-size: 0.8rem; cursor: pointer;
+      border-radius: 4px; transition: background 0.15s;
+    }
+    .route-item:hover { background: #334155; }
+    .method {
+      display: inline-block; font-size: 0.6rem; font-weight: 700;
+      padding: 0.15rem 0.4rem; border-radius: 3px; min-width: 48px;
+      text-align: center; flex-shrink: 0;
+    }
+    .method.get { background: #1e3a5f; color: #60a5fa; }
+    .method.post { background: #14532d; color: #4ade80; }
+    .method.patch { background: #5b2e0e; color: #fb923c; }
+    .method.delete { background: #450a0a; color: #f87171; }
+    .route-path { color: #94a3b8; word-break: break-all; }
+
+    .sidebar-test {
+      padding: 1rem 1.25rem; border-top: 1px solid #334155;
+      margin-top: auto;
+    }
+    .sidebar-test h2 {
+      font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em;
+      color: #64748b; margin-bottom: 0.5rem;
+    }
+    .sidebar-test label { display: block; font-size: 0.75rem; color: #94a3b8; margin-bottom: 0.25rem; }
+    .sidebar-test input, .sidebar-test textarea {
+      width: 100%; padding: 0.5rem; border-radius: 5px;
+      border: 1px solid #475569; background: #0f172a; color: #e2e8f0;
+      font-size: 0.8rem; margin-bottom: 0.5rem;
+    }
+    .sidebar-test input:focus, .sidebar-test textarea:focus {
+      outline: none; border-color: #3b82f6;
+    }
+    .sidebar-test textarea { resize: vertical; min-height: 50px; }
+    .btn-push {
+      width: 100%; padding: 0.6rem; border: none; border-radius: 6px;
+      background: #6366f1; color: #fff; font-size: 0.85rem; font-weight: 600;
+      cursor: pointer; transition: background 0.2s;
+    }
+    .btn-push:hover { background: #4f46e5; }
+    .btn-push:disabled { opacity: 0.5; cursor: not-allowed; }
+    .push-result {
+      margin-top: 0.5rem; padding: 0.5rem; border-radius: 5px;
+      background: #0f172a; font-family: monospace; font-size: 0.75rem;
+      min-height: 30px; white-space: pre-wrap; word-break: break-all;
+    }
+    .push-result.success { border-left: 3px solid #22c55e; color: #4ade80; }
+    .push-result.error { border-left: 3px solid #ef4444; color: #f87171; }
+    .push-result.sending { border-left: 3px solid #f59e0b; color: #fbbf24; }
+
+    /* ---- Main ---- */
+    .main {
+      flex: 1; display: flex; flex-direction: column; min-width: 0;
     }
     header {
-      background: #1e293b; padding: 1rem 2rem; border-bottom: 1px solid #334155;
+      background: #1e293b; padding: 0.75rem 1.5rem; border-bottom: 1px solid #334155;
       display: flex; align-items: center; justify-content: space-between;
+      flex-shrink: 0;
     }
-    h1 { font-size: 1.25rem; font-weight: 600; }
-    .status {
-      display: flex; align-items: center; gap: 0.5rem;
-      font-size: 0.875rem; color: #94a3b8;
-    }
-    .dot {
-      width: 10px; height: 10px; border-radius: 50%; display: inline-block;
-    }
-    .dot.connected { background: #22c55e; box-shadow: 0 0 8px #22c55e; }
-    .dot.disconnected { background: #ef4444; box-shadow: 0 0 8px #ef4444; }
-    .controls {
-      display: flex; gap: 1rem; align-items: center;
-    }
+    header .left { display: flex; align-items: center; gap: 1rem; }
+    header .left h2 { font-size: 1rem; font-weight: 600; }
+    .status { display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; color: #94a3b8; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .dot.connected { background: #22c55e; box-shadow: 0 0 6px #22c55e; }
+    .dot.disconnected { background: #ef4444; box-shadow: 0 0 6px #ef4444; }
+    .controls { display: flex; gap: 0.5rem; align-items: center; }
     .controls button {
       background: #334155; color: #e2e8f0; border: 1px solid #475569;
-      padding: 0.4rem 1rem; border-radius: 6px; cursor: pointer;
-      font-size: 0.8rem; transition: background 0.2s;
+      padding: 0.35rem 0.8rem; border-radius: 5px; cursor: pointer;
+      font-size: 0.75rem; transition: background 0.2s;
     }
     .controls button:hover { background: #475569; }
     .controls button.danger:hover { background: #dc2626; border-color: #dc2626; }
+    .counter { font-size: 0.8rem; color: #94a3b8; }
 
-    .container { max-width: 800px; margin: 2rem auto; padding: 0 1rem; }
-
+    .container { flex: 1; overflow-y: auto; padding: 1rem 1.5rem; }
     .notification {
-      background: #1e293b; border: 1px solid #334155; border-radius: 10px;
-      padding: 1rem 1.25rem; margin-bottom: 0.75rem;
+      background: #1e293b; border: 1px solid #334155; border-radius: 8px;
+      padding: 0.75rem 1rem; margin-bottom: 0.5rem;
       animation: slideIn 0.3s ease-out;
     }
     @keyframes slideIn {
-      from { opacity: 0; transform: translateY(-10px); }
+      from { opacity: 0; transform: translateY(-8px); }
       to { opacity: 1; transform: translateY(0); }
     }
-    .notification.new {
-      border-color: #3b82f6; box-shadow: 0 0 12px rgba(59,130,246,0.15);
-    }
-    .notification-header {
-      display: flex; justify-content: space-between; align-items: flex-start;
-      margin-bottom: 0.4rem;
-    }
-    .app-name {
-      font-size: 0.75rem; color: #64748b; text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-    .time {
-      font-size: 0.75rem; color: #64748b; white-space: nowrap;
-    }
-    .title {
-      font-size: 1rem; font-weight: 600; color: #f1f5f9; margin-bottom: 0.25rem;
-    }
-    .body {
-      font-size: 0.9rem; color: #94a3b8; line-height: 1.4;
-    }
+    .notification.new { border-color: #3b82f6; box-shadow: 0 0 10px rgba(59,130,246,0.12); }
+    .notification-header { display: flex; justify-content: space-between; margin-bottom: 0.25rem; }
+    .app-name { font-size: 0.7rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; }
+    .time { font-size: 0.7rem; color: #64748b; white-space: nowrap; }
+    .title { font-size: 0.95rem; font-weight: 600; color: #f1f5f9; margin-bottom: 0.15rem; }
+    .body { font-size: 0.85rem; color: #94a3b8; }
     .empty {
       text-align: center; color: #64748b; padding: 4rem 0;
     }
-    .empty svg { width: 64px; height: 64px; opacity: 0.3; margin-bottom: 1rem; }
-    .counter {
-      font-size: 0.875rem; color: #94a3b8;
+    .empty svg { width: 48px; height: 48px; opacity: 0.25; margin-bottom: 0.75rem; }
+
+    /* ---- Scrollbar ---- */
+    .sidebar::-webkit-scrollbar, .container::-webkit-scrollbar { width: 6px; }
+    .sidebar::-webkit-scrollbar-track, .container::-webkit-scrollbar-track { background: transparent; }
+    .sidebar::-webkit-scrollbar-thumb, .container::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+
+    @media (max-width: 768px) {
+      body { flex-direction: column; }
+      .sidebar { width: 100%; min-width: unset; height: auto; max-height: 50vh; border-right: none; border-bottom: 1px solid #334155; }
+      .sidebar-test { margin-top: unset; }
     }
   </style>
 </head>
 <body>
-  <header>
-    <div style="display:flex;align-items:center;gap:1.5rem">
+  <!-- Sidebar -->
+  <nav class="sidebar">
+    <div class="sidebar-header">
       <h1>Doorbell Detector</h1>
-      <span class="counter" id="counter">0 notificaciones</span>
+      <div class="sub">Panel de administración</div>
     </div>
-    <div class="controls">
-      <div class="status" id="status">
-        <span class="dot disconnected" id="dot"></span>
-        <span id="statusText">Desconectado</span>
-      </div>
-      <button onclick="location.reload()">Recargar</button>
-      <button class="danger" onclick="clearAll()">Limpiar todo</button>
-    </div>
-  </header>
 
-  <div class="container" id="notifications">
-    <div class="empty" id="empty">
-      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1">
-        <path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-      </svg>
-      <p>Esperando notificaciones...</p>
-      <p style="font-size:0.8rem;margin-top:0.5rem">Las notificaciones aparecerán aquí en tiempo real</p>
+    <div class="sidebar-section">
+      <h2>General</h2>
+      <div class="route-item" onclick="fetchRoute('GET','/health')">
+        <span class="method get">GET</span>
+        <span class="route-path">/health</span>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <h2>Notificaciones</h2>
+      <div class="route-item" onclick="fetchRoute('GET','/api/notifications')">
+        <span class="method get">GET</span>
+        <span class="route-path">/api/notifications</span>
+      </div>
+      <div class="route-item" onclick="fetchRoute('POST','/api/notifications')">
+        <span class="method post">POST</span>
+        <span class="route-path">/api/notifications</span>
+      </div>
+      <div class="route-item" onclick="fetchRoute('DELETE','/api/notifications')">
+        <span class="method delete">DELETE</span>
+        <span class="route-path">/api/notifications</span>
+      </div>
+      <div class="route-item" onclick="fetchRoute('GET','/api/notifications/log')">
+        <span class="method get">GET</span>
+        <span class="route-path">/api/notifications/log</span>
+      </div>
+      <div class="route-item" onclick="window.open('/api/notifications/stream','_blank')">
+        <span class="method get">SSE</span>
+        <span class="route-path">/api/notifications/stream</span>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <h2>Resident Services</h2>
+      <div class="route-item" onclick="fetchRoute('PATCH','/api/resident-services/users/push-token')">
+        <span class="method patch">PATCH</span>
+        <span class="route-path">/api/resident-services/users/push-token</span>
+      </div>
+      <div class="route-item" onclick="fetchRoute('POST','/api/resident-services/doorbell/ring')">
+        <span class="method post">POST</span>
+        <span class="route-path">/api/resident-services/doorbell/ring</span>
+      </div>
+      <div class="route-item" onclick="fetchRoute('POST','/api/resident-services/push/test')">
+        <span class="method post">POST</span>
+        <span class="route-path">/api/resident-services/push/test</span>
+      </div>
+      <div class="route-item" onclick="fetchRoute('POST','/api/resident-services/seed-data')">
+        <span class="method post">POST</span>
+        <span class="route-path">/api/resident-services/seed-data</span>
+      </div>
+      <div class="route-item" onclick="fetchRoute('GET','/api/resident-services/debug-db')">
+        <span class="method get">GET</span>
+        <span class="route-path">/api/resident-services/debug-db</span>
+      </div>
+      <div class="route-item" onclick="fetchRoute('GET','/api/resident-services/log')">
+        <span class="method get">GET</span>
+        <span class="route-path">/api/resident-services/log</span>
+      </div>
+    </div>
+
+    <div class="sidebar-test">
+      <h2>Probar Push (TuQuotaAdmin)</h2>
+      <label>Expo Push Token</label>
+      <input id="pushToken" placeholder="ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]">
+      <label>Título (opcional)</label>
+      <input id="pushTitle" value="🔔 Prueba desde Doorbell Detector">
+      <label>Cuerpo (opcional)</label>
+      <textarea id="pushBody" rows="2">Notificación de prueba enviada desde el panel Doorbell Detector</textarea>
+      <button class="btn-push" id="pushBtn" onclick="sendTestPush()">Enviar Push de Prueba</button>
+      <div class="push-result" id="pushResult">Listo para enviar</div>
+    </div>
+  </nav>
+
+  <!-- Main -->
+  <div class="main">
+    <header>
+      <div class="left">
+        <h2>Notificaciones en tiempo real</h2>
+        <span class="counter" id="counter">0</span>
+      </div>
+      <div class="controls">
+        <div class="status">
+          <span class="dot disconnected" id="dot"></span>
+          <span id="statusText">Desconectado</span>
+        </div>
+        <button onclick="location.reload()">Recargar</button>
+        <button class="danger" onclick="clearAll()">Limpiar todo</button>
+      </div>
+    </header>
+
+    <div class="container" id="notifications">
+      <div class="empty" id="empty">
+        <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1">
+          <path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+        </svg>
+        <p>Esperando notificaciones...</p>
+        <p style="font-size:0.75rem;margin-top:0.3rem">Las notificaciones aparecerán aquí en tiempo real</p>
+      </div>
     </div>
   </div>
 
   <script>
+    /* ========== API Route Tester ========== */
+    async function fetchRoute(method, path) {
+      let body = null;
+      if (method === 'POST' || method === 'PATCH') {
+        const input = prompt(`Ingresa el body JSON para ${method} ${path}:`);
+        if (input === null) return;
+        try { body = JSON.parse(input); } catch { alert('JSON inválido'); return; }
+      }
+      try {
+        const opts = { method, headers: { 'Content-Type': 'application/json' } };
+        if (body) opts.body = JSON.stringify(body);
+        const res = await fetch(path, opts);
+        const data = await res.json();
+        alert(`${method} ${path}\n${res.status} ${res.statusText}\n\n${JSON.stringify(data, null, 2)}`);
+      } catch (err) {
+        alert(`Error: ${err.message}`);
+      }
+    }
+
+    /* ========== Test Push Notification ========== */
+    async function sendTestPush() {
+      const token = document.getElementById('pushToken').value.trim();
+      if (!token) { alert('Ingresa un Expo Push Token'); return; }
+      const btn = document.getElementById('pushBtn');
+      const result = document.getElementById('pushResult');
+      btn.disabled = true; btn.textContent = 'Enviando...';
+      result.className = 'push-result sending';
+      result.textContent = 'Enviando push notification...';
+
+      try {
+        const res = await fetch('/api/resident-services/push/test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            push_token: token,
+            title: document.getElementById('pushTitle').value.trim() || undefined,
+            body: document.getElementById('pushBody').value.trim() || undefined,
+          }),
+        });
+        const data = await res.json();
+        if (res.ok && data.sent > 0) {
+          result.className = 'push-result success';
+          result.textContent = JSON.stringify(data, null, 2);
+        } else {
+          result.className = 'push-result error';
+          result.textContent = JSON.stringify(data, null, 2);
+        }
+      } catch (err) {
+        result.className = 'push-result error';
+        result.textContent = `Error de conexión: ${err.message}`;
+      } finally {
+        btn.disabled = false; btn.textContent = 'Enviar Push de Prueba';
+      }
+    }
+
+    /* ========== WebSocket Notifications (existing) ========== */
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}`;
-
     let ws;
     let notificationCount = 0;
 
     function connectWebSocket() {
       ws = new WebSocket(wsUrl);
-
-      ws.onopen = () => {
-        setConnected(true);
-      };
-
+      ws.onopen = () => setConnected(true);
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          if (data.type === 'doorbell_ring') {
-            addNotification(data);
-          }
-        } catch (e) {
-          console.error('Error parsing message:', e);
-        }
+          if (data.type === 'doorbell_ring') addNotification(data);
+        } catch (e) { console.error('Error parsing message:', e); }
       };
-
       ws.onclose = () => {
         setConnected(false);
         setTimeout(connectWebSocket, 3000);
       };
-
-      ws.onerror = () => {
-        ws.close();
-      };
+      ws.onerror = () => ws.close();
     }
 
     function setConnected(connected) {
-      const dot = document.getElementById('dot');
-      const statusText = document.getElementById('statusText');
-      dot.className = `dot ${connected ? 'connected' : 'disconnected'}`;
-      statusText.textContent = connected ? 'Conectado' : 'Desconectado';
+      document.getElementById('dot').className = `dot ${connected ? 'connected' : 'disconnected'}`;
+      document.getElementById('statusText').textContent = connected ? 'Conectado' : 'Desconectado';
     }
 
     function addNotification(data) {
       const empty = document.getElementById('empty');
       if (empty) empty.remove();
-
       const container = document.getElementById('notifications');
       const notif = document.createElement('div');
       notif.className = 'notification new';
-
       const time = new Date(data.received_at);
       const timeStr = time.toLocaleString('es-ES', {
         hour: '2-digit', minute: '2-digit', second: '2-digit',
         day: '2-digit', month: '2-digit',
       });
-
       notif.innerHTML = `
         <div class="notification-header">
           <span class="app-name">${escapeHtml(data.app_name || 'Desconocido')}</span>
@@ -165,15 +350,10 @@
         <div class="title">${escapeHtml(data.title || '')}</div>
         <div class="body">${escapeHtml(data.body || '')}</div>
       `;
-
       container.insertBefore(notif, container.firstChild);
-
       notificationCount++;
       document.getElementById('counter').textContent = `${notificationCount} notificaciones`;
-
-      setTimeout(() => {
-        notif.classList.remove('new');
-      }, 2000);
+      setTimeout(() => notif.classList.remove('new'), 2000);
     }
 
     function escapeHtml(text) {
@@ -191,14 +371,12 @@
               <path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
             </svg>
             <p>Esperando notificaciones...</p>
-            <p style="font-size:0.8rem;margin-top:0.5rem">Las notificaciones aparecerán aquí en tiempo real</p>
+            <p style="font-size:0.75rem;margin-top:0.3rem">Las notificaciones aparecerán aquí en tiempo real</p>
           </div>
         `;
         notificationCount = 0;
         document.getElementById('counter').textContent = '0 notificaciones';
-      } catch (e) {
-        console.error('Error clearing notifications:', e);
-      }
+      } catch (e) { console.error('Error clearing notifications:', e); }
     }
 
     connectWebSocket();
