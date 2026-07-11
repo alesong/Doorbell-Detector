@@ -5,6 +5,7 @@ const cors = require('cors');
 const { initDb } = require('./db');
 const { setupWebSocket } = require('./websocket');
 const notificationsRouter = require('./routes/notifications');
+const residentServicesRouter = require('./routes/resident-services');
 
 const PORT = process.env.PORT || 3000;
 
@@ -20,6 +21,7 @@ async function main() {
   });
 
   app.use('/api/notifications', notificationsRouter);
+  app.use('/api/resident-services', residentServicesRouter);
 
   const server = http.createServer(app);
   setupWebSocket(server);
