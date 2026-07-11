@@ -137,4 +137,35 @@ function clearPushToken(userId) {
   db.prepare('UPDATE users SET push_token = NULL WHERE id = ?').run(userId);
 }
 
-module.exports = { initDb, insertNotification, getNotifications, deleteAllNotifications, closeDb, notificationEvents, upsertUserPushToken, getUserPushToken, getPushTokensByServiceId, clearPushToken };
+function getDbDiagnostics() {
+  return {
+    users: db.prepare('SELECT id, push_token IS NOT NULL AS has_token FROM users').all(),
+    dwellings: db.prepare('SELECT * FROM dwellings').all(),
+    dwelling_residents: db.prepare('SELECT * FROM dwelling_residents').all(),
+    resident_services: db.prepare('SELECT id, service_id, provider FROM resident_services').all(),
+  };
+}
+
+function seedTestData(userId, pushToken, serviceId) {
+  const dwellingId = 'dwelling-' + userId;
+  const existingDwelling = db.prepare('SELECT id FROM dwellings WHERE id = ?').get(dwellingId);
+  if (!existingDwelling) {
+    db.prepare('INSERT INTO dwellings (id, name, address) VALUES (?, ?, ?)').run(dwellingId, 'Mi Vivienda', 'Dirección de prueba');
+  }
+
+  const existingResident = db.prepare('SELECT * FROM dwelling_residents WHERE dwelling_id = ? AND user_id = ?').get(dwellingId, userId);
+  if (!existingResident) {
+    db.prepare('INSERT INTO dwelling_residents (dwelling_id, user_id) VALUES (?, ?)').run(dwellingId, userId);
+  }
+
+  upsertUserPushToken(userId, pushToken);
+
+  const existingService = db.prepare('SELECT * FROM resident_services WHERE service_id = ?').get(serviceId);
+  if (!existingService) {
+    db.prepare('INSERT INTO resident_services (id, dwelling_id, service_id, provider) VALUES (?, ?, ?, ?)').run(
+      'service-' + serviceId, dwellingId, serviceId, 'Doorbell'
+    );
+  }
+}
+
+module.exports = { initDb, insertNotification, getNotifications, deleteAllNotifications, closeDb, notificationEvents, upsertUserPushToken, getUserPushToken, getPushTokensByServiceId, clearPushToken, getDbDiagnostics, seedTestData };

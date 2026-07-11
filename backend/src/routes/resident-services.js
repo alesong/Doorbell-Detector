@@ -1,5 +1,5 @@
 const { Router } = require('express');
-const { upsertUserPushToken, getUserPushToken } = require('../db');
+const { upsertUserPushToken, getUserPushToken, getDbDiagnostics, seedTestData } = require('../db');
 const { sendDoorbellPush, sendTestPush } = require('../push');
 
 const router = Router();
@@ -78,6 +78,29 @@ router.post('/push/test', async (req, res) => {
     res.json({ success: result.sent > 0, ...result });
   } catch (err) {
     console.error('Error sending test push:', err);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+router.get('/debug-db', (req, res) => {
+  res.json(getDbDiagnostics());
+});
+
+router.post('/seed-data', (req, res) => {
+  try {
+    const { user_id, push_token, service_id } = req.body;
+
+    if (!user_id || !push_token || !service_id) {
+      addLog('POST /seed-data', 'Rejected: user_id, push_token, and service_id are required');
+      return res.status(400).json({ success: false, error: 'user_id, push_token, and service_id are required' });
+    }
+
+    seedTestData(user_id, push_token, service_id);
+    addLog('POST /seed-data', `user=${user_id} service=${service_id}`);
+
+    res.json({ success: true, message: 'Test data seeded', diagnostics: getDbDiagnostics() });
+  } catch (err) {
+    console.error('Error seeding test data:', err);
     res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
