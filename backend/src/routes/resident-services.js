@@ -1,6 +1,6 @@
 const { Router } = require('express');
 const { upsertUserPushToken, getUserPushToken } = require('../db');
-const { sendDoorbellPush } = require('../push');
+const { sendDoorbellPush, sendTestPush } = require('../push');
 
 const router = Router();
 
@@ -56,6 +56,28 @@ router.post('/doorbell/ring', async (req, res) => {
     res.json({ success: true, sent: result.sent, errors: result.errors });
   } catch (err) {
     console.error('Error processing doorbell ring:', err);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+router.post('/push/test', async (req, res) => {
+  try {
+    const { push_token, title, body } = req.body;
+
+    if (!push_token) {
+      addLog('POST /push/test', 'Rejected: push_token is required');
+      return res.status(400).json({ success: false, error: 'push_token is required' });
+    }
+
+    addLog('POST /push/test', `token=${push_token.substring(0, 20)}... title="${title || ''}" body="${body || ''}"`);
+
+    const result = await sendTestPush(push_token, title, body);
+
+    addLog('POST /push/test', `sent=${result.sent} errors=${result.errors}${result.error ? ` error=${result.error}` : ''}`);
+
+    res.json({ success: result.sent > 0, ...result });
+  } catch (err) {
+    console.error('Error sending test push:', err);
     res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });

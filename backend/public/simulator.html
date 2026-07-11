@@ -132,6 +132,26 @@
       </div>
 
       <div class="card" style="margin-top:1rem">
+        <h2>Probar Push Notification (Expo)</h2>
+        <form id="pushTestForm" onsubmit="sendTestPush(event)">
+          <div class="field">
+            <label>Expo Push Token</label>
+            <input id="push_token" placeholder="ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]">
+          </div>
+          <div class="field">
+            <label>Título</label>
+            <input id="push_title" value="🔔 Prueba Timbre">
+          </div>
+          <div class="field">
+            <label>Cuerpo</label>
+            <textarea id="push_body" rows="2">Alguien está en la puerta.</textarea>
+          </div>
+          <button type="submit" class="btn" id="pushTestBtn">Enviar Push Notification</button>
+        </form>
+        <div id="pushTestResponse" class="response-box">La respuesta aparecerá aquí...</div>
+      </div>
+
+      <div class="card" style="margin-top:1rem">
         <h2>Auto-envío</h2>
         <div class="inline-btns">
           <button class="btn green" id="autoBtn" onclick="toggleAutoSend()">Iniciar auto-envío</button>
@@ -261,6 +281,55 @@
       document.getElementById('body').value = bodies[idx];
       sendNotification(null);
       autoCount++;
+    }
+
+    async function sendTestPush(event) {
+      event.preventDefault();
+      const btn = document.getElementById('pushTestBtn');
+      const resEl = document.getElementById('pushTestResponse');
+      btn.disabled = true;
+      btn.textContent = 'Enviando...';
+
+      const payload = {
+        push_token: document.getElementById('push_token').value.trim(),
+        title: document.getElementById('push_title').value.trim(),
+        body: document.getElementById('push_body').value.trim(),
+      };
+
+      if (!payload.push_token) {
+        resEl.className = 'response-box error';
+        resEl.textContent = 'Error: El token es obligatorio';
+        btn.disabled = false;
+        btn.textContent = 'Enviar Push Notification';
+        return;
+      }
+
+      addLog('sending', `Push: ${payload.title}`, 'Enviando push...');
+
+      try {
+        const res = await fetch('/api/resident-services/push/test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (res.ok && data.sent > 0) {
+          resEl.className = 'response-box success';
+          resEl.textContent = JSON.stringify(data, null, 2);
+          addLog('ok', `Push: ${payload.title}`, `Enviado OK — ticket: ${data.sent}`);
+        } else {
+          resEl.className = 'response-box error';
+          resEl.textContent = JSON.stringify(data, null, 2);
+          addLog('fail', `Push: ${payload.title}`, `Error: ${data.error || 'Falló'}`);
+        }
+      } catch (err) {
+        resEl.className = 'response-box error';
+        resEl.textContent = `Error de conexión: ${err.message}`;
+        addLog('fail', `Push: ${payload.title}`, `Error: ${err.message}`);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Enviar Push Notification';
+      }
     }
 
     function sendTestBatch() {

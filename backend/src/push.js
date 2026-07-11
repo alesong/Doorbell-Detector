@@ -69,4 +69,47 @@ async function sendDoorbellPush(serviceId) {
   return { sent, errors };
 }
 
-module.exports = { sendDoorbellPush };
+async function sendTestPush(pushToken, title, body) {
+  if (!isValidExpoToken(pushToken)) {
+    return { sent: 0, errors: 1, error: 'Invalid Expo push token' };
+  }
+
+  const messages = [{
+    to: pushToken,
+    sound: 'doorbell.wav',
+    title: title || '🔔 Prueba Timbre',
+    body: body || 'Alguien está en la puerta.',
+    priority: 'high',
+    channelId: 'doorbell',
+    data: { type: 'doorbell', url: '/my-services' },
+  }];
+
+  const chunks = expo.chunkPushNotifications(messages);
+  let sent = 0;
+  let errors = 0;
+  let errorDetail = null;
+
+  for (const chunk of chunks) {
+    try {
+      const receipts = await expo.sendPushNotificationsAsync(chunk);
+      for (const receipt of receipts) {
+        if (receipt.status === 'ok') {
+          sent++;
+        } else {
+          errors++;
+          errorDetail = receipt.message || receipt.details?.error;
+          if (receipt.details?.error === 'DeviceNotRegistered') {
+            console.log(`[Push Test] DeviceNotRegistered for token ${pushToken.substring(0, 20)}...`);
+          }
+        }
+      }
+    } catch (error) {
+      errors += chunk.length;
+      errorDetail = error.message;
+    }
+  }
+
+  return { sent, errors, error: errorDetail };
+}
+
+module.exports = { sendDoorbellPush, sendTestPush };
