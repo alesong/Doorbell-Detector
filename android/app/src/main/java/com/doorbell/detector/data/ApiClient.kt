@@ -22,7 +22,8 @@ class ApiClient {
         appName: String,
         packageName: String,
         title: String,
-        body: String
+        body: String,
+        serviceId: String = ""
     ): Result<String> {
         return try {
             val json = JSONObject().apply {
@@ -30,6 +31,9 @@ class ApiClient {
                 put("package_name", packageName)
                 put("title", title)
                 put("body", body)
+                if (serviceId.isNotBlank()) {
+                    put("service_id", serviceId)
+                }
             }
 
             val request = Request.Builder()

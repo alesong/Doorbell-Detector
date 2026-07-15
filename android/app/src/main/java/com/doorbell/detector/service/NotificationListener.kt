@@ -62,6 +62,9 @@ class NotificationListener : NotificationListenerService() {
         @Volatile
         var targetServer: String = ""
 
+        @Volatile
+        var targetServiceId: String = ""
+
         private val _notificationsFlow = MutableStateFlow<List<NotificationEntry>>(emptyList())
         val notificationsFlow: StateFlow<List<NotificationEntry>> = _notificationsFlow
 
@@ -72,12 +75,13 @@ class NotificationListener : NotificationListenerService() {
 
 
 
-        fun setTargets(packages: Set<String>, names: Map<String, String>, serverUrl: String) {
+        fun setTargets(packages: Set<String>, names: Map<String, String>, serverUrl: String, serviceId: String = "") {
             targetPackages = packages
             targetAppNames = names
             targetServer = serverUrl
-            Log.d(TAG, "setTargets: pkgs=$packages server=$serverUrl")
-            addTrace("CONFIG", "targets=$packages server=$serverUrl")
+            targetServiceId = serviceId
+            Log.d(TAG, "setTargets: pkgs=$packages server=$serverUrl serviceId=$serviceId")
+            addTrace("CONFIG", "targets=$packages server=$serverUrl serviceId=$serviceId")
         }
 
         fun clearNotifications() {
@@ -195,7 +199,8 @@ class NotificationListener : NotificationListenerService() {
                     appName = targetAppNames[packageName] ?: packageName,
                     packageName = packageName,
                     title = title,
-                    body = text
+                    body = text,
+                    serviceId = targetServiceId
                 )
                 val duration = System.currentTimeMillis() - startMs
                 val ok = result.isSuccess
@@ -239,7 +244,11 @@ class NotificationListener : NotificationListenerService() {
                     targetServer = pm.apiUrl.first()
                     addTrace("CONFIG", "loaded targetServer=$targetServer")
                 }
-                Log.d(TAG, "loadFromDataStore: pkgs=$targetPackages server=$targetServer")
+                if (targetServiceId.isBlank()) {
+                    targetServiceId = pm.doorbellServiceId.first()
+                    addTrace("CONFIG", "loaded targetServiceId=$targetServiceId")
+                }
+                Log.d(TAG, "loadFromDataStore: pkgs=$targetPackages server=$targetServer serviceId=$targetServiceId")
             } catch (e: Exception) {
                 Log.e(TAG, "loadFromDataStore failed", e)
             }
@@ -281,6 +290,18 @@ class NotificationListener : NotificationListenerService() {
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "observe apiUrl failed", e)
+            }
+        }
+        scope.launch {
+            try {
+                val pm = PreferencesManager(this@NotificationListener)
+                pm.doorbellServiceId.collect { value ->
+                    targetServiceId = value
+                    addTrace("CONFIG", "doorbellServiceId changed: $value")
+                    Log.d(TAG, "doorbellServiceId changed: $value")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "observe doorbellServiceId failed", e)
             }
         }
     }

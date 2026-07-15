@@ -15,9 +15,53 @@ function addLog(event, detail) {
   console.log(`[${entry.ts}] ${event}: ${detail}`);
 }
 
+async function triggerTuQuotaPush(serviceId) {
+  const apiUrl = process.env.TUQUOTAADMIN_API_URL;
+  const apiKey = process.env.TUQUOTAADMIN_API_KEY;
+  if (!apiUrl || !apiKey) {
+    addLog('TQUOTA', `Skipped: TUQUOTAADMIN_API_URL or TUQUOTAADMIN_API_KEY not configured`);
+    return { called: false, reason: 'not_configured' };
+  }
+
+  try {
+    const urlStr = `${apiUrl.replace(/\/+$/, '')}/public/doorbell/ring`;
+    const parsedUrl = new URL(urlStr);
+    const mod = parsedUrl.protocol === 'https:' ? require('https') : require('http');
+
+    const body = JSON.stringify({ serviceId, apiKey });
+
+    const response = await new Promise((resolve, reject) => {
+      const opts = {
+        hostname: parsedUrl.hostname,
+        port: parsedUrl.port || (parsedUrl.protocol === 'https:' ? 443 : 80),
+        path: parsedUrl.pathname + parsedUrl.search,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(body),
+        },
+      };
+      const req = mod.request(opts, (res) => {
+        let data = '';
+        res.on('data', (chunk) => { data += chunk; });
+        res.on('end', () => resolve({ status: res.statusCode, body: data }));
+      });
+      req.on('error', reject);
+      req.write(body);
+      req.end();
+    });
+
+    addLog('TQUOTA', `POST /public/doorbell/ring service=${serviceId} status=${response.status}`);
+    return { called: true, status: response.status };
+  } catch (err) {
+    addLog('TQUOTA', `Error calling TuQuotaAdmin: ${err.message}`);
+    return { called: true, error: err.message };
+  }
+}
+
 router.post('/', async (req, res) => {
   try {
-    const { app_name, package_name, title, body } = req.body;
+    const { app_name, package_name, title, body, service_id } = req.body;
     const startMs = Date.now();
 
     if (!title && !body) {
@@ -41,6 +85,16 @@ router.post('/', async (req, res) => {
 
     broadcastNotification(stored);
     addLog('WS', `Broadcast id=${notification.id}`);
+
+    // If service_id is provided, trigger push notification via TuQuotaAdmin
+    if (service_id) {
+      addLog('POST', `Triggering push for service_id=${service_id}`);
+      triggerTuQuotaPush(service_id).then(result => {
+        addLog('POST', `Push trigger result: ${JSON.stringify(result)}`);
+      });
+    } else {
+      addLog('POST', `No service_id provided, skipping push trigger`);
+    }
 
     const duration = Date.now() - startMs;
     addLog('POST', `Complete id=${notification.id} ${duration}ms`);

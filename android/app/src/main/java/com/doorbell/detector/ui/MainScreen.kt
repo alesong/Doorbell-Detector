@@ -391,6 +391,7 @@ private fun MainContent(
     val apiClient = remember { ApiClient() }
 
     val apiUrl by preferencesManager.apiUrl.collectAsState(initial = "")
+    val savedServiceId by preferencesManager.doorbellServiceId.collectAsState(initial = "")
 
     var apps by remember { mutableStateOf<List<AppInfo>>(emptyList()) }
     var filteredApps by remember { mutableStateOf<List<AppInfo>>(emptyList()) }
@@ -401,6 +402,7 @@ private fun MainContent(
     var connectionStatus by remember { mutableStateOf<String?>(null) }
     var isTesting by remember { mutableStateOf(false) }
     var apiUrlInput by remember(apiUrl) { mutableStateOf(apiUrl) }
+    var serviceIdInput by remember(savedServiceId) { mutableStateOf(savedServiceId) }
     var isStartingService by remember { mutableStateOf(false) }
 
     // Simulator state
@@ -776,6 +778,50 @@ private fun MainContent(
                                 MaterialTheme.colorScheme.error
                         )
                     }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    HorizontalDivider()
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Text(
+                        text = "ID del Servicio (TuQuotaAdmin)",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Text(
+                        text = "Copia el ID del servicio Doorbell desde la pantalla de Servicios Integrados en TuQuotaAdmin Web.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = serviceIdInput,
+                        onValueChange = { serviceIdInput = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Service ID") },
+                        placeholder = { Text("uuid-del-servicio") },
+                        singleLine = true
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Button(
+                        onClick = {
+                            scope.launch {
+                                preferencesManager.setDoorbellServiceId(serviceIdInput)
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Guardar ID del Servicio")
+                    }
                 }
             }
 
@@ -935,7 +981,7 @@ private fun MainContent(
                     Button(
                         onClick = {
                             isStartingService = true
-                            NotificationListener.setTargets(selectedPackages, selectedAppNames, apiUrl)
+                            NotificationListener.setTargets(selectedPackages, selectedAppNames, apiUrl, serviceIdInput)
                             val intent = Intent(context, NotificationListener::class.java).apply {
                                 putExtra("start_from_ui", true)
                                 putExtra("force_rebind", true)
@@ -1102,7 +1148,8 @@ private fun MainContent(
                                         appName = simAppName,
                                         packageName = simPackageName,
                                         title = simTitle,
-                                        body = simBody
+                                        body = simBody,
+                                        serviceId = serviceIdInput
                                     )
                                 }
                                 simResult = if (result.isSuccess) {

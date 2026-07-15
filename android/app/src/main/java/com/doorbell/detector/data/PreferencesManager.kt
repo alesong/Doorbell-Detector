@@ -21,10 +21,15 @@ class PreferencesManager(private val context: Context) {
         private val SELECTED_PACKAGES = stringPreferencesKey("selected_packages_json")
         private val SELECTED_APP_NAMES = stringPreferencesKey("selected_app_names_json")
         private val PRIVACY_ACCEPTED = booleanPreferencesKey("privacy_accepted")
+        private val SERVICE_ID = stringPreferencesKey("doorbell_service_id")
     }
 
     val apiUrl: Flow<String> = context.dataStore.data.map { prefs ->
         prefs[API_URL] ?: "http://192.168.1.100:3000"
+    }
+
+    val doorbellServiceId: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[SERVICE_ID] ?: ""
     }
 
     val selectedPackages: Flow<Set<String>> = context.dataStore.data.map { prefs ->
@@ -96,6 +101,12 @@ class PreferencesManager(private val context: Context) {
     suspend fun acceptPrivacy() {
         context.dataStore.edit { prefs ->
             prefs[PRIVACY_ACCEPTED] = true
+        }
+    }
+
+    suspend fun setDoorbellServiceId(serviceId: String) {
+        context.dataStore.edit { prefs ->
+            prefs[SERVICE_ID] = serviceId
         }
     }
 }
