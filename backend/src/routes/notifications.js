@@ -15,9 +15,9 @@ function addLog(event, detail) {
   console.log(`[${entry.ts}] ${event}: ${detail}`);
 }
 
-async function triggerTuQuotaPush(serviceId) {
+async function triggerTuQuotaPush(serviceId, apiKeyFromRequest) {
   const apiUrl = process.env.TUQUOTAADMIN_API_URL;
-  const apiKey = process.env.TUQUOTAADMIN_API_KEY;
+  const apiKey = apiKeyFromRequest || process.env.TUQUOTAADMIN_API_KEY;
   if (!apiUrl || !apiKey) {
     addLog('TQUOTA', `Skipped: TUQUOTAADMIN_API_URL or TUQUOTAADMIN_API_KEY not configured`);
     return { called: false, reason: 'not_configured' };
@@ -61,7 +61,7 @@ async function triggerTuQuotaPush(serviceId) {
 
 router.post('/', async (req, res) => {
   try {
-    const { app_name, package_name, title, body, service_id } = req.body;
+    const { app_name, package_name, title, body, service_id, api_key } = req.body;
     const startMs = Date.now();
 
     if (!title && !body) {
@@ -88,8 +88,8 @@ router.post('/', async (req, res) => {
 
     // If service_id is provided, trigger push notification via TuQuotaAdmin
     if (service_id) {
-      addLog('POST', `Triggering push for service_id=${service_id}`);
-      triggerTuQuotaPush(service_id).then(result => {
+      addLog('POST', `Triggering push for service_id=${service_id}${api_key ? ' (con api_key)' : ' (sin api_key)'}`);
+      triggerTuQuotaPush(service_id, api_key).then(result => {
         addLog('POST', `Push trigger result: ${JSON.stringify(result)}`);
       });
     } else {

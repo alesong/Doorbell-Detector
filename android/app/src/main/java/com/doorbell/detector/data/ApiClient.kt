@@ -23,7 +23,8 @@ class ApiClient {
         packageName: String,
         title: String,
         body: String,
-        serviceId: String = ""
+        serviceId: String = "",
+        apiKey: String = ""
     ): Result<String> {
         return try {
             val json = JSONObject().apply {
@@ -33,6 +34,9 @@ class ApiClient {
                 put("body", body)
                 if (serviceId.isNotBlank()) {
                     put("service_id", serviceId)
+                }
+                if (apiKey.isNotBlank()) {
+                    put("api_key", apiKey)
                 }
             }
 

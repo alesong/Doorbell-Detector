@@ -48,6 +48,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -1322,7 +1323,8 @@ private fun MainContent(
                                         packageName = simPackageName,
                                         title = simTitle,
                                         body = simBody,
-                                        serviceId = serviceIdInput
+                                        serviceId = serviceIdInput,
+                                        apiKey = tuquotaKeyInput
                                     )
                                 }
                                 simResult = if (result.isSuccess) {
