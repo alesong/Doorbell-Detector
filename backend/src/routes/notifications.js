@@ -18,6 +18,7 @@ function addLog(event, detail) {
 async function triggerTuQuotaPush(serviceId, apiKeyFromRequest) {
   const apiUrl = process.env.TUQUOTAADMIN_API_URL;
   const apiKey = apiKeyFromRequest || process.env.TUQUOTAADMIN_API_KEY;
+  console.log(`[TQUOTA DEBUG] serviceId="${serviceId}" apiKey="${apiKey}" length=${apiKey?.length} source=${apiKeyFromRequest ? 'from_request' : 'from_env'}`);
   if (!apiUrl || !apiKey) {
     addLog('TQUOTA', `Skipped: TUQUOTAADMIN_API_URL or TUQUOTAADMIN_API_KEY not configured`);
     return { called: false, reason: 'not_configured' };

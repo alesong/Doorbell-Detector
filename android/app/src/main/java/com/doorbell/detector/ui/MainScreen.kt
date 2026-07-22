@@ -846,89 +846,94 @@ private fun MainContent(
                         }
                     }
 
-                    // TuQuotaAdmin direct fields
+                    // TuQuotaAdmin fields (always visible)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    HorizontalDivider()
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Text(
+                        text = "TuQuotaAdmin (para envío de push)",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Text(
+                        text = "Configura la URL y API key para que el backend envíe el push a TuQuotaAdmin.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = tuquotaUrlInput,
+                        onValueChange = { tuquotaUrlInput = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("URL de TuQuotaAdmin") },
+                        placeholder = { Text("https://api.tuquotaadmin.com") },
+                        singleLine = true
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = tuquotaKeyInput,
+                        onValueChange = { tuquotaKeyInput = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("API Key") },
+                        placeholder = { Text("tu-api-key") },
+                        singleLine = true
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedButton(
+                        onClick = {
+                            scope.launch {
+                                preferencesManager.setTuquotaApiUrl(tuquotaUrlInput)
+                                preferencesManager.setTuquotaApiKey(tuquotaKeyInput)
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Guardar")
+                    }
+
+                    // "Probar conexión" button (only for tuquota_direct/both)
                     if (sendModeInput == "tuquota_direct" || sendModeInput == "both") {
-                        Spacer(modifier = Modifier.height(12.dp))
-                        HorizontalDivider()
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        Text(
-                            text = "TuQuotaAdmin Directo",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold
-                        )
-
                         Spacer(modifier = Modifier.height(8.dp))
 
-                        OutlinedTextField(
-                            value = tuquotaUrlInput,
-                            onValueChange = { tuquotaUrlInput = it },
-                            modifier = Modifier.fillMaxWidth(),
-                            label = { Text("URL de TuQuotaAdmin") },
-                            placeholder = { Text("https://api.tuquotaadmin.com") },
-                            singleLine = true
-                        )
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        OutlinedTextField(
-                            value = tuquotaKeyInput,
-                            onValueChange = { tuquotaKeyInput = it },
-                            modifier = Modifier.fillMaxWidth(),
-                            label = { Text("API Key") },
-                            placeholder = { Text("tu-api-key") },
-                            singleLine = true,
-                            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
-                        )
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            OutlinedButton(
-                                onClick = {
-                                    scope.launch {
-                                        preferencesManager.setTuquotaApiUrl(tuquotaUrlInput)
-                                        preferencesManager.setTuquotaApiKey(tuquotaKeyInput)
+                        Button(
+                            onClick = {
+                                isTestingTuquota = true
+                                tuquotaTestStatus = null
+                                scope.launch {
+                                    val result = withContext(Dispatchers.IO) {
+                                        apiClient.ringDoorbellDirect(
+                                            tuquotaUrlInput, serviceIdInput, tuquotaKeyInput
+                                        )
                                     }
-                                },
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text("Guardar")
-                            }
-
-                            Button(
-                                onClick = {
-                                    isTestingTuquota = true
-                                    tuquotaTestStatus = null
-                                    scope.launch {
-                                        val result = withContext(Dispatchers.IO) {
-                                            apiClient.ringDoorbellDirect(
-                                                tuquotaUrlInput, serviceIdInput, tuquotaKeyInput
-                                            )
-                                        }
-                                        tuquotaTestStatus = if (result.isSuccess) {
-                                            "Conectado a TuQuotaAdmin"
-                                        } else {
-                                            "Error: ${result.exceptionOrNull()?.message}"
-                                        }
-                                        isTestingTuquota = false
+                                    tuquotaTestStatus = if (result.isSuccess) {
+                                        "Conectado a TuQuotaAdmin"
+                                    } else {
+                                        "Error: ${result.exceptionOrNull()?.message}"
                                     }
-                                },
-                                modifier = Modifier.weight(1f),
-                                enabled = !isTestingTuquota && serviceIdInput.isNotBlank() && tuquotaKeyInput.isNotBlank()
-                            ) {
-                                if (isTestingTuquota) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(20.dp),
-                                        strokeWidth = 2.dp
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
+                                    isTestingTuquota = false
                                 }
-                                Text(if (isTestingTuquota) "Probando..." else "Probar conexión")
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = !isTestingTuquota && serviceIdInput.isNotBlank() && tuquotaKeyInput.isNotBlank()
+                        ) {
+                            if (isTestingTuquota) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    strokeWidth = 2.dp
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
                             }
+                            Text(if (isTestingTuquota) "Probando..." else "Probar conexión directa")
                         }
 
                         if (tuquotaTestStatus != null) {
