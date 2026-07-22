@@ -65,6 +65,15 @@ class NotificationListener : NotificationListenerService() {
         @Volatile
         var targetServiceId: String = ""
 
+        @Volatile
+        var tuquotaUrl: String = ""
+
+        @Volatile
+        var tuquotaApiKey: String = ""
+
+        @Volatile
+        var sendMode: String = "doorbell_backend"
+
         private val _notificationsFlow = MutableStateFlow<List<NotificationEntry>>(emptyList())
         val notificationsFlow: StateFlow<List<NotificationEntry>> = _notificationsFlow
 
@@ -75,13 +84,24 @@ class NotificationListener : NotificationListenerService() {
 
 
 
-        fun setTargets(packages: Set<String>, names: Map<String, String>, serverUrl: String, serviceId: String = "") {
+        fun setTargets(
+            packages: Set<String>,
+            names: Map<String, String>,
+            serverUrl: String,
+            serviceId: String = "",
+            tuquotaUrl: String = "",
+            tuquotaApiKey: String = "",
+            sendMode: String = "doorbell_backend"
+        ) {
             targetPackages = packages
             targetAppNames = names
             targetServer = serverUrl
             targetServiceId = serviceId
-            Log.d(TAG, "setTargets: pkgs=$packages server=$serverUrl serviceId=$serviceId")
-            addTrace("CONFIG", "targets=$packages server=$serverUrl serviceId=$serviceId")
+            this.tuquotaUrl = tuquotaUrl
+            this.tuquotaApiKey = tuquotaApiKey
+            this.sendMode = sendMode
+            Log.d(TAG, "setTargets: pkgs=$packages server=$serverUrl serviceId=$serviceId mode=$sendMode")
+            addTrace("CONFIG", "targets=$packages server=$serverUrl serviceId=$serviceId mode=$sendMode")
         }
 
         fun clearNotifications() {
@@ -183,49 +203,90 @@ class NotificationListener : NotificationListenerService() {
             addTrace("FILTER", "BLOQUEADO pkg=$packageName (targets=$targetPackages)")
             return
         }
-        if (targetServer.isBlank()) {
-            addTrace("FILTER", "BLOQUEADO — servidor no configurado")
-            return
-        }
         if (title.isBlank() && text.isBlank()) return
 
-        addTrace("HTTP", "POST ${packageName} title='$title' INICIO")
+        var anyOk = false
+        var firstError: String? = null
 
-        scope.launch {
-            val startMs = System.currentTimeMillis()
-            try {
-                val result = apiClient.sendNotification(
-                    baseUrl = targetServer,
-                    appName = targetAppNames[packageName] ?: packageName,
-                    packageName = packageName,
-                    title = title,
-                    body = text,
-                    serviceId = targetServiceId
-                )
-                val duration = System.currentTimeMillis() - startMs
-                val ok = result.isSuccess
-                val current = _notificationsFlow.value.toMutableList()
-                val idx = current.indexOfFirst { it === entry }
-                if (idx >= 0) {
-                    current[idx] = entry.copy(
-                        sent = ok,
-                        error = if (ok) null else result.exceptionOrNull()?.message
-                    )
-                    _notificationsFlow.value = current
-                }
-                addTrace("HTTP", "POST ${if (ok) "OK" else "FAIL"} ${duration}ms${if (!ok) " ${result.exceptionOrNull()?.message}" else ""}")
-                Log.d(TAG, "sendNotification: ${if (ok) "OK" else result.exceptionOrNull()?.message} (${duration}ms)")
-            } catch (e: Exception) {
-                val duration = System.currentTimeMillis() - startMs
-                Log.e(TAG, "sendNotification exception", e)
-                addTrace("HTTP", "POST EXCEPTION ${duration}ms: ${e.message}")
-                val current = _notificationsFlow.value.toMutableList()
-                val idx = current.indexOfFirst { it === entry }
-                if (idx >= 0) {
-                    current[idx] = entry.copy(error = e.message)
-                    _notificationsFlow.value = current
+        // Send to Doorbell Detector backend
+        if (sendMode == "doorbell_backend" || sendMode == "both") {
+            if (targetServer.isBlank()) {
+                addTrace("FILTER", "BLOQUEADO backend — servidor no configurado")
+            } else {
+                addTrace("HTTP", "BACKEND POST ${packageName} title='$title' INICIO")
+                scope.launch {
+                    val startMs = System.currentTimeMillis()
+                    try {
+                        val result = apiClient.sendNotification(
+                            baseUrl = targetServer,
+                            appName = targetAppNames[packageName] ?: packageName,
+                            packageName = packageName,
+                            title = title,
+                            body = text,
+                            serviceId = targetServiceId
+                        )
+                        val duration = System.currentTimeMillis() - startMs
+                        val ok = result.isSuccess
+                        anyOk = anyOk || ok
+                        if (!ok) firstError = result.exceptionOrNull()?.message
+                        updateEntryStatus(entry, ok, result.exceptionOrNull()?.message)
+                        addTrace("HTTP", "BACKEND ${if (ok) "OK" else "FAIL"} ${duration}ms${if (!ok) " ${result.exceptionOrNull()?.message}" else ""}")
+                        Log.d(TAG, "sendNotification(backend): ${if (ok) "OK" else result.exceptionOrNull()?.message} (${duration}ms)")
+                    } catch (e: Exception) {
+                        val duration = System.currentTimeMillis() - startMs
+                        Log.e(TAG, "sendNotification(backend) exception", e)
+                        firstError = e.message
+                        updateEntryStatus(entry, false, e.message)
+                        addTrace("HTTP", "BACKEND EXCEPTION ${duration}ms: ${e.message}")
+                    }
                 }
             }
+        }
+
+        // Send directly to TuQuotaAdmin
+        if (sendMode == "tuquota_direct" || sendMode == "both") {
+            if (tuquotaUrl.isBlank() || tuquotaApiKey.isBlank() || targetServiceId.isBlank()) {
+                addTrace("FILTER", "BLOQUEADO TuQuotaAdmin — URL, API Key o Service ID no configurado")
+            } else {
+                addTrace("HTTP", "TUQUOTA POST ${packageName} INICIO")
+                scope.launch {
+                    val startMs = System.currentTimeMillis()
+                    try {
+                        val result = apiClient.ringDoorbellDirect(
+                            tuquotaBaseUrl = tuquotaUrl,
+                            serviceId = targetServiceId,
+                            apiKey = tuquotaApiKey
+                        )
+                        val duration = System.currentTimeMillis() - startMs
+                        val ok = result.isSuccess
+                        anyOk = anyOk || ok
+                        if (!ok) firstError = result.exceptionOrNull()?.message
+                        updateEntryStatus(entry, ok, result.exceptionOrNull()?.message)
+                        addTrace("HTTP", "TUQUOTA ${if (ok) "OK" else "FAIL"} ${duration}ms${if (!ok) " ${result.exceptionOrNull()?.message}" else ""}")
+                        Log.d(TAG, "ringDoorbellDirect: ${if (ok) "OK" else result.exceptionOrNull()?.message} (${duration}ms)")
+                    } catch (e: Exception) {
+                        val duration = System.currentTimeMillis() - startMs
+                        Log.e(TAG, "ringDoorbellDirect exception", e)
+                        firstError = e.message
+                        updateEntryStatus(entry, false, e.message)
+                        addTrace("HTTP", "TUQUOTA EXCEPTION ${duration}ms: ${e.message}")
+                    }
+                }
+            }
+        }
+    }
+
+    private fun updateEntryStatus(entry: NotificationEntry, ok: Boolean, error: String?) {
+        val current = _notificationsFlow.value.toMutableList()
+        val idx = current.indexOfFirst { it === entry }
+        if (idx >= 0) {
+            current[idx] = entry.copy(
+                sent = current[idx].sent || ok,
+                error = if (!ok && error != null) {
+                    listOfNotNull(current[idx].error, error).joinToString("; ")
+                } else current[idx].error
+            )
+            _notificationsFlow.value = current
         }
     }
 
@@ -248,7 +309,19 @@ class NotificationListener : NotificationListenerService() {
                     targetServiceId = pm.doorbellServiceId.first()
                     addTrace("CONFIG", "loaded targetServiceId=$targetServiceId")
                 }
-                Log.d(TAG, "loadFromDataStore: pkgs=$targetPackages server=$targetServer serviceId=$targetServiceId")
+                if (tuquotaUrl.isBlank()) {
+                    tuquotaUrl = pm.tuquotaApiUrl.first()
+                    addTrace("CONFIG", "loaded tuquotaUrl=$tuquotaUrl")
+                }
+                if (tuquotaApiKey.isBlank()) {
+                    tuquotaApiKey = pm.tuquotaApiKey.first()
+                    addTrace("CONFIG", "loaded tuquotaApiKey=${tuquotaApiKey.take(8)}...")
+                }
+                if (sendMode.isBlank()) {
+                    sendMode = pm.sendMode.first()
+                    addTrace("CONFIG", "loaded sendMode=$sendMode")
+                }
+                Log.d(TAG, "loadFromDataStore: pkgs=$targetPackages server=$targetServer serviceId=$targetServiceId mode=$sendMode")
             } catch (e: Exception) {
                 Log.e(TAG, "loadFromDataStore failed", e)
             }
@@ -302,6 +375,42 @@ class NotificationListener : NotificationListenerService() {
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "observe doorbellServiceId failed", e)
+            }
+        }
+        scope.launch {
+            try {
+                val pm = PreferencesManager(this@NotificationListener)
+                pm.tuquotaApiUrl.collect { value ->
+                    tuquotaUrl = value
+                    addTrace("CONFIG", "tuquotaUrl changed: $value")
+                    Log.d(TAG, "tuquotaUrl changed: $value")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "observe tuquotaUrl failed", e)
+            }
+        }
+        scope.launch {
+            try {
+                val pm = PreferencesManager(this@NotificationListener)
+                pm.tuquotaApiKey.collect { value ->
+                    tuquotaApiKey = value
+                    addTrace("CONFIG", "tuquotaApiKey changed: ${value.take(8)}...")
+                    Log.d(TAG, "tuquotaApiKey changed: ${value.take(8)}...")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "observe tuquotaApiKey failed", e)
+            }
+        }
+        scope.launch {
+            try {
+                val pm = PreferencesManager(this@NotificationListener)
+                pm.sendMode.collect { value ->
+                    sendMode = value
+                    addTrace("CONFIG", "sendMode changed: $value")
+                    Log.d(TAG, "sendMode changed: $value")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "observe sendMode failed", e)
             }
         }
     }

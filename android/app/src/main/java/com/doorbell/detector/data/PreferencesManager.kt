@@ -22,6 +22,9 @@ class PreferencesManager(private val context: Context) {
         private val SELECTED_APP_NAMES = stringPreferencesKey("selected_app_names_json")
         private val PRIVACY_ACCEPTED = booleanPreferencesKey("privacy_accepted")
         private val SERVICE_ID = stringPreferencesKey("doorbell_service_id")
+        private val TUQUOTA_API_URL = stringPreferencesKey("tuquota_api_url")
+        private val TUQUOTA_API_KEY = stringPreferencesKey("tuquota_api_key")
+        private val SEND_MODE = stringPreferencesKey("send_mode")
     }
 
     val apiUrl: Flow<String> = context.dataStore.data.map { prefs ->
@@ -30,6 +33,18 @@ class PreferencesManager(private val context: Context) {
 
     val doorbellServiceId: Flow<String> = context.dataStore.data.map { prefs ->
         prefs[SERVICE_ID] ?: ""
+    }
+
+    val tuquotaApiUrl: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[TUQUOTA_API_URL] ?: ""
+    }
+
+    val tuquotaApiKey: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[TUQUOTA_API_KEY] ?: ""
+    }
+
+    val sendMode: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[SEND_MODE] ?: "doorbell_backend"
     }
 
     val selectedPackages: Flow<Set<String>> = context.dataStore.data.map { prefs ->
@@ -107,6 +122,24 @@ class PreferencesManager(private val context: Context) {
     suspend fun setDoorbellServiceId(serviceId: String) {
         context.dataStore.edit { prefs ->
             prefs[SERVICE_ID] = serviceId
+        }
+    }
+
+    suspend fun setTuquotaApiUrl(url: String) {
+        context.dataStore.edit { prefs ->
+            prefs[TUQUOTA_API_URL] = url
+        }
+    }
+
+    suspend fun setTuquotaApiKey(apiKey: String) {
+        context.dataStore.edit { prefs ->
+            prefs[TUQUOTA_API_KEY] = apiKey
+        }
+    }
+
+    suspend fun setSendMode(mode: String) {
+        context.dataStore.edit { prefs ->
+            prefs[SEND_MODE] = mode
         }
     }
 }

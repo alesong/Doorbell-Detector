@@ -72,4 +72,32 @@ class ApiClient {
             Result.failure(e)
         }
     }
+
+    fun ringDoorbellDirect(
+        tuquotaBaseUrl: String,
+        serviceId: String,
+        apiKey: String
+    ): Result<String> {
+        return try {
+            val json = JSONObject().apply {
+                put("serviceId", serviceId)
+                put("apiKey", apiKey)
+            }
+
+            val request = Request.Builder()
+                .url("${tuquotaBaseUrl.trimEnd('/')}/public/doorbell/ring")
+                .post(json.toString().toRequestBody(jsonMediaType))
+                .build()
+
+            val response = client.newCall(request).execute()
+
+            if (response.isSuccessful) {
+                Result.success(response.body?.string() ?: "")
+            } else {
+                Result.failure(Exception("Error ${response.code}: ${response.message}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 }

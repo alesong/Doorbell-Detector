@@ -19,11 +19,11 @@ async function sendDoorbellPush(serviceId) {
     .filter(r => isValidExpoToken(r.push_token))
     .map(r => ({
       to: r.push_token,
-      sound: 'doorbell.wav',
+      sound: null,
       title: '¡Alguien toca el timbre!',
       body: 'Alguien está en la puerta.',
       priority: 'high',
-      channelId: 'doorbell',
+      channelId: 'doorbell_v2',
       data: { type: 'doorbell', url: '/my-services' },
     }));
 
@@ -76,11 +76,11 @@ async function sendTestPush(pushToken, title, body) {
 
   const messages = [{
     to: pushToken,
-    sound: 'doorbell.wav',
+    sound: null,
     title: title || '🔔 Prueba Timbre',
     body: body || 'Alguien está en la puerta.',
     priority: 'high',
-    channelId: 'doorbell',
+    channelId: 'doorbell_v2',
     data: { type: 'doorbell', url: '/my-services' },
   }];
 

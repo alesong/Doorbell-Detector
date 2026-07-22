@@ -392,6 +392,9 @@ private fun MainContent(
 
     val apiUrl by preferencesManager.apiUrl.collectAsState(initial = "")
     val savedServiceId by preferencesManager.doorbellServiceId.collectAsState(initial = "")
+    val savedTuquotaUrl by preferencesManager.tuquotaApiUrl.collectAsState(initial = "")
+    val savedTuquotaKey by preferencesManager.tuquotaApiKey.collectAsState(initial = "")
+    val savedSendMode by preferencesManager.sendMode.collectAsState(initial = "doorbell_backend")
 
     var apps by remember { mutableStateOf<List<AppInfo>>(emptyList()) }
     var filteredApps by remember { mutableStateOf<List<AppInfo>>(emptyList()) }
@@ -401,8 +404,13 @@ private fun MainContent(
     var manualPackageName by remember { mutableStateOf("com.notifsender") }
     var connectionStatus by remember { mutableStateOf<String?>(null) }
     var isTesting by remember { mutableStateOf(false) }
+    var tuquotaTestStatus by remember { mutableStateOf<String?>(null) }
+    var isTestingTuquota by remember { mutableStateOf(false) }
     var apiUrlInput by remember(apiUrl) { mutableStateOf(apiUrl) }
     var serviceIdInput by remember(savedServiceId) { mutableStateOf(savedServiceId) }
+    var tuquotaUrlInput by remember(savedTuquotaUrl) { mutableStateOf(savedTuquotaUrl) }
+    var tuquotaKeyInput by remember(savedTuquotaKey) { mutableStateOf(savedTuquotaKey) }
+    var sendModeInput by remember(savedSendMode) { mutableStateOf(savedSendMode) }
     var isStartingService by remember { mutableStateOf(false) }
 
     // Simulator state
@@ -711,74 +719,231 @@ private fun MainContent(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    OutlinedTextField(
-                        value = apiUrlInput,
-                        onValueChange = { apiUrlInput = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("URL del servidor") },
-                        placeholder = { Text("http://192.168.1.100:3000") },
-                        singleLine = true
+                    // Mode selector
+                    Text(
+                        text = "Modo de envío",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
                     )
+                    Spacer(modifier = Modifier.height(4.dp))
 
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        OutlinedButton(
-                            onClick = {
-                                scope.launch {
-                                    preferencesManager.setApiUrl(apiUrlInput)
-                                }
-                            },
-                            modifier = Modifier.weight(1f)
+                    val modes = listOf(
+                        "doorbell_backend" to "Solo backend Doorbell Detector",
+                        "tuquota_direct" to "Solo TuQuotaAdmin directo",
+                        "both" to "Ambos"
+                    )
+                    modes.forEach { (value, label) ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { sendModeInput = value },
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Guardar")
+                            RadioButton(
+                                selected = sendModeInput == value,
+                                onClick = { sendModeInput = value }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(text = label, style = MaterialTheme.typography.bodyMedium)
                         }
+                    }
 
-                        Button(
-                            onClick = {
-                                isTesting = true
-                                connectionStatus = null
-                                scope.launch {
-                                    val result = withContext(Dispatchers.IO) {
-                                        apiClient.testConnection(apiUrlInput)
-                                    }
-                                    connectionStatus = if (result.isSuccess) {
-                                        "Conectado al servidor"
-                                    } else {
-                                        "Connection failed: ${result.exceptionOrNull()?.message}"
-                                    }
-                                    isTesting = false
-                                }
-                            },
-                            modifier = Modifier.weight(1f),
-                            enabled = !isTesting
-                        ) {
-                            if (isTesting) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(20.dp),
-                                    strokeWidth = 2.dp
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    // Save mode button
+                    Button(
+                        onClick = {
+                            scope.launch {
+                                preferencesManager.setSendMode(sendModeInput)
                             }
-                            Text(if (isTesting) "Probando conexión..." else "Probar conexión")
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Guardar modo de envío")
+                    }
+
+                    // Doorbell backend fields
+                    if (sendModeInput == "doorbell_backend" || sendModeInput == "both") {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        HorizontalDivider()
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Text(
+                            text = "Backend Doorbell Detector",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        OutlinedTextField(
+                            value = apiUrlInput,
+                            onValueChange = { apiUrlInput = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("URL del servidor") },
+                            placeholder = { Text("http://192.168.1.100:3000") },
+                            singleLine = true
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = {
+                                    scope.launch {
+                                        preferencesManager.setApiUrl(apiUrlInput)
+                                    }
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("Guardar")
+                            }
+
+                            Button(
+                                onClick = {
+                                    isTesting = true
+                                    connectionStatus = null
+                                    scope.launch {
+                                        val result = withContext(Dispatchers.IO) {
+                                            apiClient.testConnection(apiUrlInput)
+                                        }
+                                        connectionStatus = if (result.isSuccess) {
+                                            "Conectado al servidor"
+                                        } else {
+                                            "Connection failed: ${result.exceptionOrNull()?.message}"
+                                        }
+                                        isTesting = false
+                                    }
+                                },
+                                modifier = Modifier.weight(1f),
+                                enabled = !isTesting
+                            ) {
+                                if (isTesting) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(20.dp),
+                                        strokeWidth = 2.dp
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                }
+                                Text(if (isTesting) "Probando conexión..." else "Probar conexión")
+                            }
+                        }
+
+                        if (connectionStatus != null) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = connectionStatus ?: "",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = if (connectionStatus?.startsWith("Conectado") == true)
+                                    MaterialTheme.colorScheme.primary
+                                else
+                                    MaterialTheme.colorScheme.error
+                            )
                         }
                     }
 
-                    if (connectionStatus != null) {
-                        Spacer(modifier = Modifier.height(8.dp))
+                    // TuQuotaAdmin direct fields
+                    if (sendModeInput == "tuquota_direct" || sendModeInput == "both") {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        HorizontalDivider()
+                        Spacer(modifier = Modifier.height(12.dp))
+
                         Text(
-                            text = connectionStatus ?: "",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = if (connectionStatus?.startsWith("Conectado") == true)
-                                MaterialTheme.colorScheme.primary
-                            else
-                                MaterialTheme.colorScheme.error
+                            text = "TuQuotaAdmin Directo",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
                         )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        OutlinedTextField(
+                            value = tuquotaUrlInput,
+                            onValueChange = { tuquotaUrlInput = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("URL de TuQuotaAdmin") },
+                            placeholder = { Text("https://api.tuquotaadmin.com") },
+                            singleLine = true
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        OutlinedTextField(
+                            value = tuquotaKeyInput,
+                            onValueChange = { tuquotaKeyInput = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("API Key") },
+                            placeholder = { Text("tu-api-key") },
+                            singleLine = true,
+                            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation()
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = {
+                                    scope.launch {
+                                        preferencesManager.setTuquotaApiUrl(tuquotaUrlInput)
+                                        preferencesManager.setTuquotaApiKey(tuquotaKeyInput)
+                                    }
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("Guardar")
+                            }
+
+                            Button(
+                                onClick = {
+                                    isTestingTuquota = true
+                                    tuquotaTestStatus = null
+                                    scope.launch {
+                                        val result = withContext(Dispatchers.IO) {
+                                            apiClient.ringDoorbellDirect(
+                                                tuquotaUrlInput, serviceIdInput, tuquotaKeyInput
+                                            )
+                                        }
+                                        tuquotaTestStatus = if (result.isSuccess) {
+                                            "Conectado a TuQuotaAdmin"
+                                        } else {
+                                            "Error: ${result.exceptionOrNull()?.message}"
+                                        }
+                                        isTestingTuquota = false
+                                    }
+                                },
+                                modifier = Modifier.weight(1f),
+                                enabled = !isTestingTuquota && serviceIdInput.isNotBlank() && tuquotaKeyInput.isNotBlank()
+                            ) {
+                                if (isTestingTuquota) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(20.dp),
+                                        strokeWidth = 2.dp
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                }
+                                Text(if (isTestingTuquota) "Probando..." else "Probar conexión")
+                            }
+                        }
+
+                        if (tuquotaTestStatus != null) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = tuquotaTestStatus ?: "",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = if (tuquotaTestStatus?.startsWith("Conectado") == true)
+                                    MaterialTheme.colorScheme.primary
+                                else
+                                    MaterialTheme.colorScheme.error
+                            )
+                        }
                     }
 
+                    // Service ID (always visible, needed for both modes)
                     Spacer(modifier = Modifier.height(16.dp))
 
                     HorizontalDivider()
@@ -786,7 +951,7 @@ private fun MainContent(
                     Spacer(modifier = Modifier.height(12.dp))
 
                     Text(
-                        text = "ID del Servicio (TuQuotaAdmin)",
+                        text = "ID del Servicio (Doorbell)",
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold
                     )
@@ -981,7 +1146,15 @@ private fun MainContent(
                     Button(
                         onClick = {
                             isStartingService = true
-                            NotificationListener.setTargets(selectedPackages, selectedAppNames, apiUrl, serviceIdInput)
+                            NotificationListener.setTargets(
+                                packages = selectedPackages,
+                                names = selectedAppNames,
+                                serverUrl = apiUrl,
+                                serviceId = serviceIdInput,
+                                tuquotaUrl = tuquotaUrlInput,
+                                tuquotaApiKey = tuquotaKeyInput,
+                                sendMode = sendModeInput
+                            )
                             val intent = Intent(context, NotificationListener::class.java).apply {
                                 putExtra("start_from_ui", true)
                                 putExtra("force_rebind", true)
@@ -1230,6 +1403,13 @@ private fun MainContent(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             text = "Servidor: ${NotificationListener.targetServer}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "Modo: ${NotificationListener.sendMode}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
